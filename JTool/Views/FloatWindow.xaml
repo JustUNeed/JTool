@@ -87,15 +87,18 @@
                     <Border Height="1" Background="#FF444444" Margin="0,0,0,6"/>
                     <Grid Margin="0,0,0,4">
                         <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="*"/>
+                            
                         </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="0" Text="📌 看板（点击复制）"
+                        <Button Grid.Column="0" Content="▾" Width="20" Height="20"
+         Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
+         Cursor="Hand" ToolTip="折叠/展开"
+         Command="{Binding DataContext.ToggleBoardCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                        
+                        <TextBlock Grid.Column="1" Text="看板"
                                    Foreground="#FFAAAAAA" FontSize="11" VerticalAlignment="Center"/>
-                        <Button Grid.Column="1" Content="▾" Width="20" Height="20"
-                                Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
-                                Cursor="Hand" ToolTip="折叠/展开"
-                                Command="{Binding DataContext.ToggleBoardCommand, RelativeSource={RelativeSource AncestorType=Window}}"/>
+                       
                     </Grid>
 
                     <StackPanel Visibility="{Binding IsBoardExpanded, Converter={StaticResource BoolToVis}}">
