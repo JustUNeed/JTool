@@ -1,0 +1,28 @@
+﻿<Window x:Class="JTool.Settings.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="JTool 设置" Width="360" Height="280"
+        WindowStartupLocation="CenterScreen" Background="#FF2D2D30">
+    <StackPanel Margin="16">
+        <TextBlock Text="通用设置" Foreground="White" FontSize="16"
+                   FontWeight="Bold" Margin="0,0,0,12"/>
+
+        <CheckBox Content="开机自启" IsChecked="{Binding AutoStart}"
+                  Foreground="White" Margin="0,6"/>
+        <CheckBox Content="总在最前" IsChecked="{Binding Topmost}"
+                  Foreground="White" Margin="0,6"/>
+        <CheckBox Content="允许下载网络图片" IsChecked="{Binding EnableImageDownload}"
+                  Foreground="White" Margin="0,6"/>
+
+        <StackPanel Orientation="Horizontal" Margin="0,10">
+            <TextBlock Text="悬浮球大小" Foreground="White" VerticalAlignment="Center" Width="90"/>
+            <Slider Width="160" Minimum="24" Maximum="64"
+                    Value="{Binding BallSize}" VerticalAlignment="Center"/>
+            <TextBlock Text="{Binding BallSize, StringFormat={}{0:0}}"
+                       Foreground="White" VerticalAlignment="Center" Margin="8,0,0,0"/>
+        </StackPanel>
+
+        <Button Content="保存并关闭" Padding="14,6" Margin="0,20,0,0"
+                HorizontalAlignment="Right" Click="SaveClose_Click"/>
+    </StackPanel>
+</Window>

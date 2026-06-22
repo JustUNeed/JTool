@@ -1,0 +1,34 @@
+﻿<UserControl x:Class="JTool.Widgets.TextBoard.TextBoardControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <ItemsControl ItemsSource="{Binding Items}">
+        <ItemsControl.ItemTemplate>
+            <DataTemplate>
+                <Border Margin="0,2" Background="#FF3A3A3D">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Button Grid.Column="0" Background="Transparent" BorderThickness="0"
+                                Cursor="Hand" HorizontalContentAlignment="Left" Padding="8,6"
+                                ToolTip="点击复制文本"
+                                Command="{Binding DataContext.CopyCommand,
+                                          RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}">
+                            <TextBlock Text="{Binding Preview}" Foreground="White" FontSize="11"
+                                       TextWrapping="Wrap" MaxHeight="48"
+                                       TextTrimming="CharacterEllipsis"/>
+                        </Button>
+                        <Button Grid.Column="1" Content="✕" Width="22" Height="22" FontSize="10"
+                                Margin="2" Background="Transparent" Foreground="#FFAAAAAA"
+                                BorderThickness="0" Cursor="Hand" VerticalAlignment="Top" ToolTip="删除"
+                                Command="{Binding DataContext.RemoveCommand,
+                                          RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                CommandParameter="{Binding}"/>
+                    </Grid>
+                </Border>
+            </DataTemplate>
+        </ItemsControl.ItemTemplate>
+    </ItemsControl>
+</UserControl>

@@ -1,0 +1,97 @@
+﻿<Window x:Class="JTool.Hosting.FloatWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="JTool" WindowStyle="None" AllowsTransparency="True"
+        Background="Transparent" ShowInTaskbar="False" Topmost="True" AllowDrop="True"
+        Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}">
+
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </Window.Resources>
+
+    <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
+
+        <!-- 形态一：快捷面板（容器） -->
+        <Border x:Name="MenuPanel" Visibility="Collapsed"
+                Width="{Binding PanelWidth}" Height="{Binding PanelHeight}"
+                Background="#FF2D2D30" CornerRadius="12" Padding="8">
+            <Grid>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
+
+                <!-- 顶栏 -->
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="DragHandle" Grid.Column="0" Width="32" Height="32"
+                            Background="#FF3F51B5" CornerRadius="4" Cursor="SizeAll"
+                            Margin="0,0,8,0" MouseLeftButtonDown="DragHandle_MouseDown">
+                        <TextBlock Text="⠿" Foreground="White" FontSize="14"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="JTool" Foreground="#FFAAAAAA"
+                               FontSize="12" VerticalAlignment="Center"/>
+                    <Button Grid.Column="2" Content="⚙" Width="24" Height="24" Cursor="Hand"
+                            Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
+                            Command="{Binding OpenSettingsCommand}" ToolTip="设置"/>
+                    <Button Grid.Column="3" Content="✕" Width="24" Height="24" Cursor="Hand"
+                            Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
+                            Command="{Binding ExitCommand}" ToolTip="退出"/>
+                </Grid>
+
+                <!-- widget 列表区 -->
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <ItemsControl ItemsSource="{Binding Widgets}">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <StackPanel Visibility="{Binding HasContent, Converter={StaticResource BoolToVis}}"
+                                            Margin="0,0,0,8">
+                                    <TextBlock Text="{Binding Title}" Foreground="#FFAAAAAA"
+                                               FontSize="11" Margin="0,4"/>
+                                    <ContentPresenter Content="{Binding View}"/>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </ScrollViewer>
+
+                <!-- 缩放手柄 -->
+                <Thumb x:Name="ResizeThumb" Grid.Row="1" Width="16" Height="16"
+                       HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                       Margin="0,0,-4,-4" Cursor="SizeNWSE"
+                       DragDelta="ResizeThumb_DragDelta"
+                       DragCompleted="ResizeThumb_DragCompleted">
+                    <Thumb.Template>
+                        <ControlTemplate TargetType="Thumb">
+                            <Grid Background="Transparent">
+                                <Path Stroke="#FF888888" StrokeThickness="1"
+                                      Data="M 14,4 L 4,14 M 14,9 L 9,14 M 14,14 L 13,14"/>
+                            </Grid>
+                        </ControlTemplate>
+                    </Thumb.Template>
+                </Thumb>
+            </Grid>
+        </Border>
+
+        <!-- 形态二：投放槽 -->
+        <Border x:Name="DropPanel" Visibility="Collapsed"
+                Background="#FF2D2D30" CornerRadius="12" Padding="6" Width="140">
+            <StackPanel x:Name="DropSlotsPanel"/>
+        </Border>
+
+        <!-- 形态零：悬浮球 -->
+        <Border x:Name="BallPanel" Width="32" Height="32"
+                Background="#FF3F51B5" Cursor="Hand" MouseEnter="Ball_MouseEnter">
+            <TextBlock Text="J" Foreground="White" FontSize="22" FontWeight="Bold"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+
+    </Grid>
+</Window>

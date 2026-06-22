@@ -1,21 +1,24 @@
 ﻿using System;
 using System.IO;
 using System.Net.Http;
+using System.Threading;
 using System.Threading.Tasks;
-using System.Windows;
 using System.Windows.Media.Imaging;
+using JTool.Core;
 
 namespace JTool.Services;
 
-/// <summary>图片下载与保存。只做 IO，不弹 UI、不解析拖拽数据。</summary>
-public class WebImageService
+/// <summary>网络图片下载。带超时、大小上限、Content-Type 校验。只做 IO，不弹 UI。</summary>
+public sealed class WebImageService
 {
-    private static readonly HttpClient _http = new();
+    private const long MaxBytes = 20 * 1024 * 1024;          // 20MB 上限
+    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(15);
+    private static readonly HttpClient Http = new() { Timeout = Timeout };
 
-    /// <summary>下载 URL 为 BitmapSource。失败会抛异常，由调用方决定如何处理。</summary>
-    public async Task<BitmapSource> DownloadBitmapAsync(string url)
+    /// <summary>下载并解码为 BitmapSource。失败抛异常，由调用方处理。</summary>
+    public async Task<BitmapSource> DownloadBitmapAsync(string url, CancellationToken ct = default)
     {
-        var bytes = await _http.GetByteArrayAsync(url);
+        var bytes = await DownloadBytesAsync(url, requireImage: true, ct);
         using var ms = new MemoryStream(bytes);
         var bmp = new BitmapImage();
         bmp.BeginInit();
@@ -26,39 +29,37 @@ public class WebImageService
         return bmp;
     }
 
-    /// <summary>把拖入的图片（位图或 URL）保存到目标目录，返回成功数。失败抛异常。</summary>
-    public async Task<int> SaveDroppedImageAsync(IDataObject data, string targetDir)
+    /// <summary>下载图片字节并写入目标目录，返回保存的完整路径。</summary>
+    public async Task<string> DownloadToFileAsync(string url, string targetDir,
+        CancellationToken ct = default)
     {
-        if (!Directory.Exists(targetDir)) return 0;
-
-        var bmp = DragDataParser.GetBitmap(data);
-        if (bmp != null)
-            return SaveBitmap(bmp, targetDir) ? 1 : 0;
-
-        // 优先图片 URL，其次任意 http 文本
-        string? url = DragDataParser.GetImageUrl(data);
-        if (string.IsNullOrEmpty(url))
-        {
-            var text = DragDataParser.GetText(data);
-            if (DragDataParser.IsHttp(text)) url = text;
-        }
-        if (string.IsNullOrEmpty(url)) return 0;
-
-        var bytes = await _http.GetByteArrayAsync(url);
+        var bytes = await DownloadBytesAsync(url, requireImage: true, ct);
         string dest = EnsureUnique(Path.Combine(targetDir, MakeFileName(url)));
-        await File.WriteAllBytesAsync(dest, bytes);
-        return 1;
+        await File.WriteAllBytesAsync(dest, bytes, ct);
+        return dest;
     }
 
-    private static bool SaveBitmap(BitmapSource bmp, string targetDir)
+    private static async Task<byte[]> DownloadBytesAsync(string url, bool requireImage,
+        CancellationToken ct)
     {
-        string dest = EnsureUnique(Path.Combine(targetDir,
-            $"image_{DateTime.Now:yyyyMMdd_HHmmss}.png"));
-        using var fs = new FileStream(dest, FileMode.Create);
-        var enc = new PngBitmapEncoder();
-        enc.Frames.Add(BitmapFrame.Create(bmp));
-        enc.Save(fs);
-        return true;
+        using var resp = await Http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+        resp.EnsureSuccessStatusCode();
+
+        if (requireImage)
+        {
+            var type = resp.Content.Headers.ContentType?.MediaType ?? "";
+            if (!type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"非图片内容: {type}");
+        }
+
+        var len = resp.Content.Headers.ContentLength;
+        if (len is > MaxBytes)
+            throw new InvalidOperationException($"图片过大: {len} 字节");
+
+        var bytes = await resp.Content.ReadAsByteArrayAsync(ct);
+        if (bytes.Length > MaxBytes)
+            throw new InvalidOperationException($"图片过大: {bytes.Length} 字节");
+        return bytes;
     }
 
     private static string MakeFileName(string url)
@@ -75,8 +76,7 @@ public class WebImageService
 
     private static string Sanitize(string name)
     {
-        foreach (var c in Path.GetInvalidFileNameChars())
-            name = name.Replace(c, '_');
+        foreach (var c in Path.GetInvalidFileNameChars()) name = name.Replace(c, '_');
         return name;
     }
 
