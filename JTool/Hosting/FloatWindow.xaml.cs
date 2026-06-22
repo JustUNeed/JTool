@@ -4,9 +4,12 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using JTool.Core;
 using JTool.DragDrop;
+using JTUI.Controls;
+using JTUI.Controls.Viewer;
 
 namespace JTool.Hosting;
 
@@ -68,6 +71,50 @@ public partial class FloatWindow : Window
                 ShowMenu();   // 新增：常驻则直接显示面板
             else ShowBallOnly();
         };
+
+
+
+
+
+
+        // 左键:复制图片到剪贴板
+        Grid.ImageLeftClick += path =>
+        {
+            try
+            {
+                var bmp = new BitmapImage();
+                bmp.BeginInit();
+                bmp.CacheOption = BitmapCacheOption.OnLoad;   // 读完即释放文件句柄
+                bmp.UriSource = new Uri(path);
+                bmp.EndInit();
+                bmp.Freeze();
+
+                Clipboard.SetImage(bmp);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"复制失败:{ex.Message}");
+            }
+        };
+
+        // 右键:打开预览窗口
+        Grid.ImageRightClick += path =>
+        {
+            var win = new JTWindow { Width = 1000, Height = 700, Title = "预览" };
+            var viewer = new JTImageViewer { ImagePath = path };   // 自动用同目录构建翻页列表
+            win.Content = viewer;
+            win.Show();
+        };
+
+        Grid.ImageImported += path => MessageBox.Show($"已添加 {System.IO.Path.GetFileName(path)}");
+        Grid.ImportFailed += (reason, src) => MessageBox.Show($"导入失败({reason}):{src}");
+        Grid.ImageDeleted += path => System.IO.File.Delete(path);
+
+
+
+
+
+
     }
 
     private void ApplyBallSize(double size)

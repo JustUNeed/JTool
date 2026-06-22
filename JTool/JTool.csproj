@@ -16,6 +16,16 @@
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.3.2" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="8.0.1" />
     <PackageReference Include="Microsoft.VisualBasic" Version="10.3.0" />
+    <PackageReference Include="SkiaSharp" Version="4.150.0-preview.1.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="JTUI">
+      <HintPath>..\..\WPF代码\JTUI\JTUI\bin\Release\net8.0-windows\publish\win-x64\JTUI.dll</HintPath>
+    </Reference>
+    <Reference Include="VirtualizingWrapPanel">
+      <HintPath>..\..\WPF代码\JTUI\JTUI\bin\Release\net8.0-windows\publish\win-x64\VirtualizingWrapPanel.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

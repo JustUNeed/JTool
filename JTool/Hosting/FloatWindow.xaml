@@ -5,6 +5,7 @@
         xmlns:sg="clr-namespace:JTool.Widgets.ShortcutGrid"
         xmlns:ib="clr-namespace:JTool.Widgets.ImageBoard"
         xmlns:tb="clr-namespace:JTool.Widgets.TextBoard"
+         xmlns:img="clr-namespace:JTUI.Controls.ImageGrid;assembly=JTUI"
         Title="JTool" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" Topmost="True" AllowDrop="True"
         Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}">
@@ -91,6 +92,20 @@
                                         Margin="2,4,2,2"/>
                                 </StackPanel>
                             </Border>
+
+
+                            <!-- 图片瀑布流(独立一行) -->
+                            <img:JTImageGrid  x:Name="Grid"
+            Grid.Row="2"
+            Margin="12,0"
+                           AllowDragOut="True"
+                          AllowDropImport="True"
+            ImageDirectory="C:\Users\JUNPC\Desktop\葵"
+            ColumnWidth="80"
+            ThumbnailSize="90"  
+               ItemSpacing="2"
+    ShowDeleteButton="True"
+/>
 
                             <!-- 图片看板 -->
                             <Border Background="#FF333337" CornerRadius="6" Margin="0,0,0,6"

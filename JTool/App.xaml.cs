@@ -7,6 +7,7 @@ using JTool.Settings;
 using JTool.Widgets.ImageBoard;
 using JTool.Widgets.ShortcutGrid;
 using JTool.Widgets.TextBoard;
+using JTUI.Theming;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
 
@@ -31,9 +32,9 @@ public partial class App : Application
         var win = _provider.GetRequiredService<FloatWindow>();
         win.Show();
 
-       
+        JTThemeManager.Initialize(JTTheme.Light);
 
-     
+
 
     }
 
