@@ -1,8 +1,8 @@
-﻿<jt:JTWindow x:Class="JTool.Views.SettingsWindow"
+﻿<Window x:Class="JTool.Views.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:dd="urn:gong-wpf-dragdrop"
-        xmlns:jt="clr-namespace:JTUI.Controls;assembly=JTUI"
+      
         Title="JTool 设置" Width="540" Height="560"
         WindowStartupLocation="CenterScreen" Background="#FF2D2D30">
     <Grid Margin="12">
@@ -80,4 +80,4 @@
             <Button Grid.Column="1" Content="关闭" Padding="16,6" Click="Close_Click"/>
         </Grid>
     </Grid>
-</jt:JTWindow>
+</Window>

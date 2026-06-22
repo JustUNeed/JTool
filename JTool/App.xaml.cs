@@ -3,7 +3,7 @@ using Hardcodet.Wpf.TaskbarNotification;
 using JTool.Services;
 using JTool.ViewModels;
 using JTool.Views;
-using JTUI.Theming;
+
 
 namespace JTool;
 
@@ -16,7 +16,7 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        JTThemeManager.Initialize(JTTheme.Light);
+      
 
 
         _vm = new FloatWindowViewModel(

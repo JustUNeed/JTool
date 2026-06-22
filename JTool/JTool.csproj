@@ -15,10 +15,4 @@
 		<PackageReference Include="gong-wpf-dragdrop" Version="4.0.0" />
 	</ItemGroup>
 
-	<ItemGroup>
-	  <Reference Include="JTUI">
-	    <HintPath>..\..\WPF代码\JTool\JTUI\bin\Debug\net8.0-windows\JTUI.dll</HintPath>
-	  </Reference>
-	</ItemGroup>
-
 </Project>

@@ -1,10 +1,10 @@
 ﻿using System.Windows;
 using JTool.ViewModels;
-using JTUI.Controls;
+
 
 namespace JTool.Views;
 
-public partial class SettingsWindow : JTWindow
+public partial class SettingsWindow : Window
 {
     public SettingsWindow() => InitializeComponent();
 

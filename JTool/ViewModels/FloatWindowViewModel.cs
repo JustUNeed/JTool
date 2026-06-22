@@ -2,11 +2,12 @@
 using JTool.Models;
 using JTool.Services;
 
+using System;
 using System.Collections.ObjectModel;
 using System.IO;
-
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
-
 using System.Windows.Media.Imaging;
 
 namespace JTool.ViewModels;
@@ -30,16 +31,24 @@ public class FloatWindowViewModel : ObservableObject, IDropTarget
     public ObservableCollection<BoardItemViewModel> BoardImageItems { get; } = new();
 
     // ===== 布局 =====
-    private int _columns;
-    public int Columns { get => _columns; set => SetProperty(ref _columns, Math.Max(1, value)); }
+    private double _panelWidth;
+    public double PanelWidth
+    {
+        get => _panelWidth;
+        set => SetProperty(ref _panelWidth, Math.Max(160, Math.Min(800, value)));
+    }
+    private double _panelHeight;
+    public double PanelHeight
+    {
+        get => _panelHeight;
+        set => SetProperty(ref _panelHeight, Math.Max(120, Math.Min(900, value)));
+    }
     private double _cellWidth;
     public double CellWidth { get => _cellWidth; set => SetProperty(ref _cellWidth, value); }
     private double _cellHeight;
     public double CellHeight { get => _cellHeight; set => SetProperty(ref _cellHeight, value); }
     private double _iconSize;
     public double IconSize { get => _iconSize; set => SetProperty(ref _iconSize, value); }
-    private double _menuMaxHeight;
-    public double MenuMaxHeight { get => _menuMaxHeight; set => SetProperty(ref _menuMaxHeight, value); }
 
     // ===== 状态 =====
     private bool _isBallVisible = true;
@@ -116,12 +125,11 @@ public class FloatWindowViewModel : ObservableObject, IDropTarget
         foreach (var d in _config.TargetDirs.Where(Directory.Exists).Distinct())
             TargetDirs.Add(d);
 
-        Columns = _config.Grid.Columns;
+        PanelWidth = _config.PanelWidth > 0 ? _config.PanelWidth : 260;
+        PanelHeight = _config.PanelHeight > 0 ? _config.PanelHeight : 360;
         CellWidth = _config.Grid.CellWidth;
         CellHeight = _config.Grid.CellHeight;
         IconSize = _config.Grid.IconSize;
-        MenuMaxHeight = _config.Grid.MaxRows > 0
-            ? _config.Grid.MaxRows * (_config.Grid.CellHeight + 8) + 8 : 480;
 
         // 看板（独立持久化）
         BoardItems.Clear();
@@ -194,6 +202,15 @@ public class FloatWindowViewModel : ObservableObject, IDropTarget
         Save();
     }
 
+    public void SavePanelSize(double width, double height)
+    {
+        PanelWidth = width;     // 走属性夹取
+        PanelHeight = height;
+        _config.PanelWidth = PanelWidth;
+        _config.PanelHeight = PanelHeight;
+        Save();
+    }
+
     // ===== 设置 =====
     private Views.SettingsWindow? _settingsWindow;
     private void OpenSettings()
@@ -256,19 +273,41 @@ public class FloatWindowViewModel : ObservableObject, IDropTarget
         SaveBoard();
     }
 
+    /// <summary>URL 图片：先插占位项立即反馈，后台下载完成再原地替换。成功返回 true，失败返回 false。</summary>
     public async Task<bool> AddImageFromUrlAsync(string url)
     {
-        var bmp = await _webImageService.DownloadBitmapAsync(url);
-        if (bmp == null) return false;
-        AddImageToBoard(bmp);
-        return true;
+        var placeholder = new BoardItemViewModel(new BoardItem
+        {
+            Type = BoardItemType.Image,
+            CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
+        })
+        { LoadState = BoardLoadState.Loading };
+
+        BoardItems.Add(placeholder);
+        RebuildBoardCategories();
+
+        try
+        {
+            var bmp = await _webImageService.DownloadBitmapAsync(url);
+            var model = _boardService.CreateImageItem(bmp);
+            if (model == null) throw new Exception("图片保存失败");
+            placeholder.SetImageReady(model.ImagePath);
+            SaveBoard();
+            return true;
+        }
+        catch
+        {
+            BoardItems.Remove(placeholder);
+            RebuildBoardCategories();
+            return false;
+        }
     }
 
     private void CopyBoardItem(BoardItemViewModel? vm)
     {
         if (vm == null) return;
         if (vm.IsText) _boardService.CopyText(vm.Text);
-        else _boardService.CopyImage(vm.ImagePath);
+        else if (vm.IsImageReady) _boardService.CopyImage(vm.ImagePath);
     }
 
     private void RemoveBoardItem(BoardItemViewModel? vm)
@@ -294,7 +333,10 @@ public class FloatWindowViewModel : ObservableObject, IDropTarget
         OnPropertyChanged(nameof(HasBoardImage));
     }
 
-    private void SaveBoard() => _boardService.Save(BoardItems.Select(v => v.Model));
+    private void SaveBoard()
+        => _boardService.Save(BoardItems
+            .Where(v => !v.IsLoading && !v.IsFailed)
+            .Select(v => v.Model));
 
     // ===== 拖拽排序 =====
     public void DragOver(IDropInfo dropInfo)

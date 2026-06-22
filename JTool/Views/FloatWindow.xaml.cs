@@ -1,14 +1,15 @@
-﻿
+﻿using System;
 using System.IO;
-
-using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using JTool.Helpers;
+using JTool.Services;
 using JTool.ViewModels;
 
 namespace JTool.Views;
@@ -65,23 +66,53 @@ public partial class FloatWindow : Window
                     if (!IsMouseReallyOver()) _collapseTimer.Start();
                 }, DispatcherPriority.Background);
         };
+
+        // 启动即为悬浮球态：先关自动尺寸，再显式收成小球
+        Loaded += (s, e) =>
+        {
+            SizeToContent = SizeToContent.Manual;
+            ShowBallOnly();
+        };
     }
 
     // ===== 形态切换 =====
+    // 三个形态统一在这里设置「可见性 + 窗口尺寸」，避免尺寸与形态不一致导致看不见/收不回。
+
     private void ShowBallOnly()
     {
+        SizeToContent = SizeToContent.Manual;
         MenuPanel.Visibility = Visibility.Collapsed;
         DropPanel.Visibility = Visibility.Collapsed;
         BallPanel.Visibility = Visibility.Visible;
+        Width = 32;
+        Height = 32;
+    }
+
+    private void ShowMenu()
+    {
+        SizeToContent = SizeToContent.Manual;
+        BallPanel.Visibility = Visibility.Collapsed;
+        DropPanel.Visibility = Visibility.Collapsed;
+        MenuPanel.Visibility = Visibility.Visible;
+        Width = _vm.PanelWidth;
+        Height = _vm.PanelHeight;
+    }
+
+    private void ShowDrop()
+    {
+        BallPanel.Visibility = Visibility.Collapsed;
+        MenuPanel.Visibility = Visibility.Collapsed;
+        DropPanel.Visibility = Visibility.Visible;
+        // 投放态：固定宽度，高度随槽位内容自适应
+        SizeToContent = SizeToContent.Height;
+        Width = 130;
     }
 
     private void Ball_MouseEnter(object sender, MouseEventArgs e)
     {
         if (_suppressHover) return;
         _collapseTimer.Stop();
-        BallPanel.Visibility = Visibility.Collapsed;
-        DropPanel.Visibility = Visibility.Collapsed;
-        MenuPanel.Visibility = Visibility.Visible;
+        ShowMenu();
     }
 
     private void ApplyVisibility()
@@ -93,11 +124,9 @@ public partial class FloatWindow : Window
     // ===== 文件/数据拖入 =====
     private void Window_DragEnter(object sender, DragEventArgs e)
     {
-        if (!CanAccept(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
+        if (!DragDataParser.CanAccept(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
         _collapseTimer.Stop();
-        BallPanel.Visibility = Visibility.Collapsed;
-        MenuPanel.Visibility = Visibility.Collapsed;
-        DropPanel.Visibility = Visibility.Visible;
+        ShowDrop();
         BuildDropSlots(e.Data);
         e.Effects = DragDropEffects.Copy;
         e.Handled = true;
@@ -105,7 +134,7 @@ public partial class FloatWindow : Window
 
     private void Window_DragOver(object sender, DragEventArgs e)
     {
-        e.Effects = CanAccept(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = DragDataParser.CanAccept(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
@@ -118,22 +147,15 @@ public partial class FloatWindow : Window
         if (!inside) ShowBallOnly();
     }
 
-    private static bool CanAccept(IDataObject data)
-        => data.GetDataPresent(DataFormats.FileDrop)
-        || data.GetDataPresent(DataFormats.Text)
-        || data.GetDataPresent(DataFormats.Html)
-        || data.GetDataPresent("text/x-moz-url")
-        || data.GetDataPresent(DataFormats.Bitmap);
-
     private void BuildDropSlots(IDataObject data)
     {
         DropSlotsPanel.Children.Clear();
 
         bool isFile = data.GetDataPresent(DataFormats.FileDrop);
-        bool hasFolder = isFile && ((string[])data.GetData(DataFormats.FileDrop)!).Any(Directory.Exists);
+        bool hasFolder = DragDataParser.HasFolder(data);
         bool hasImageData = data.GetDataPresent(DataFormats.Bitmap);
-        string? droppedText = ExtractDroppedText(data);
-        bool isImageUrl = droppedText != null && LooksLikeImageUrl(droppedText);
+        string? droppedText = DragDataParser.GetText(data);
+        bool isImageUrl = DragDataParser.IsProbablyImageUrl(droppedText);
         bool hasText = !string.IsNullOrWhiteSpace(droppedText);
         bool canSaveImage = hasImageData || isImageUrl;
 
@@ -159,57 +181,38 @@ public partial class FloatWindow : Window
                 string captured = dir;
                 DropSlotsPanel.Children.Add(CreateSlot("→ " + SafeName(dir), "#FF3F51B5",
                     files => _vm.MoveToDir(files, captured),
-                    d => _ = _vm.SaveWebImageAsync(d, captured)));
+                    d => _ = SaveWebImageSafe(d, captured)));
             }
         }
     }
 
     private async void AddToBoard(IDataObject data)
     {
-        if (data.GetDataPresent(DataFormats.Bitmap)
-            && data.GetData(DataFormats.Bitmap) is BitmapSource bmp)
-        {
-            _vm.AddImageToBoard(bmp);
-            return;
-        }
+        var bmp = DragDataParser.GetBitmap(data);
+        if (bmp != null) { _vm.AddImageToBoard(bmp); return; }
 
-        string? text = ExtractDroppedText(data);
+        string? text = DragDataParser.GetText(data);
         if (string.IsNullOrWhiteSpace(text)) return;
 
-        if (LooksLikeImageUrl(text))
+        // 乐观策略：可能是图片就先当图片下载，失败再退回文本
+        if (DragDataParser.IsProbablyImageUrl(text))
         {
             bool ok = await _vm.AddImageFromUrlAsync(text);
-            if (ok) return;
+            if (!ok) _vm.AddTextToBoard(text);
+            return;
         }
         _vm.AddTextToBoard(text);
     }
 
-    private static string? ExtractDroppedText(IDataObject data)
+    // 保存网络/位图图片到目录，集中处理异常提示（Service 不再弹窗）
+    private async Task SaveWebImageSafe(IDataObject data, string targetDir)
     {
-        if (data.GetDataPresent("text/x-moz-url"))
+        try { await _vm.SaveWebImageAsync(data, targetDir); }
+        catch (Exception ex)
         {
-            var raw = data.GetData("text/x-moz-url") as string;
-            var first = raw?.Split('\n').FirstOrDefault()?.Trim();
-            if (!string.IsNullOrWhiteSpace(first)) return first;
+            MessageBox.Show($"保存图片失败：{ex.Message}", "JTool",
+                MessageBoxButton.OK, MessageBoxImage.Warning);
         }
-        if (data.GetDataPresent(DataFormats.Html))
-        {
-            var html = data.GetData(DataFormats.Html) as string;
-            var m = Regex.Match(html ?? "", @"<img[^>]+src=[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-            if (m.Success) return m.Groups[1].Value;
-        }
-        if (data.GetDataPresent(DataFormats.Text))
-            return (data.GetData(DataFormats.Text) as string)?.Trim();
-        return null;
-    }
-
-    private static bool LooksLikeImageUrl(string s)
-    {
-        if (!s.StartsWith("http://") && !s.StartsWith("https://")) return false;
-        string lower = s.ToLowerInvariant();
-        return lower.Contains(".jpg") || lower.Contains(".jpeg") || lower.Contains(".png")
-            || lower.Contains(".gif") || lower.Contains(".webp") || lower.Contains(".bmp")
-            || lower.Contains("image") || lower.Contains("/img");
     }
 
     private Border CreateSlot(string text, string colorHex,
@@ -277,6 +280,20 @@ public partial class FloatWindow : Window
         DragHandle.MouseLeftButtonUp -= DragHandle_MouseUp;
         _vm.SaveWindowPosition(Left, Top);
         ShowBallOnly();
+    }
+
+    // ===== 右下角对角缩放 =====
+    private void ResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
+    {
+        _vm.PanelWidth += e.HorizontalChange;   // VM 内已夹取 160~800
+        _vm.PanelHeight += e.VerticalChange;    // VM 内已夹取 120~900
+        Width = _vm.PanelWidth;
+        Height = _vm.PanelHeight;
+    }
+
+    private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
+    {
+        _vm.SavePanelSize(_vm.PanelWidth, _vm.PanelHeight);
     }
 
     // ===== 工具 =====

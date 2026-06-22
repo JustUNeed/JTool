@@ -7,107 +7,65 @@ using System.Windows.Media.Imaging;
 
 namespace JTool.Services;
 
+/// <summary>图片下载与保存。只做 IO，不弹 UI、不解析拖拽数据。</summary>
 public class WebImageService
 {
     private static readonly HttpClient _http = new();
 
-    /// <summary>下载 URL 为 BitmapSource（看板用）。失败返回 null。</summary>
-    public async Task<BitmapSource?> DownloadBitmapAsync(string url)
+    /// <summary>下载 URL 为 BitmapSource。失败会抛异常，由调用方决定如何处理。</summary>
+    public async Task<BitmapSource> DownloadBitmapAsync(string url)
     {
-        try
-        {
-            var bytes = await _http.GetByteArrayAsync(url);
-            using var ms = new MemoryStream(bytes);
-            var bmp = new BitmapImage();
-            bmp.BeginInit();
-            bmp.CacheOption = BitmapCacheOption.OnLoad;
-            bmp.StreamSource = ms;
-            bmp.EndInit();
-            bmp.Freeze();
-            return bmp;
-        }
-        catch { return null; }
+        var bytes = await _http.GetByteArrayAsync(url);
+        using var ms = new MemoryStream(bytes);
+        var bmp = new BitmapImage();
+        bmp.BeginInit();
+        bmp.CacheOption = BitmapCacheOption.OnLoad;
+        bmp.StreamSource = ms;
+        bmp.EndInit();
+        bmp.Freeze();
+        return bmp;
     }
 
-    /// <summary>把拖入的图片（URL/位图）保存到目标目录。返回成功数。</summary>
+    /// <summary>把拖入的图片（位图或 URL）保存到目标目录，返回成功数。失败抛异常。</summary>
     public async Task<int> SaveDroppedImageAsync(IDataObject data, string targetDir)
     {
         if (!Directory.Exists(targetDir)) return 0;
 
-        // 直接位图
-        if (data.GetDataPresent(DataFormats.Bitmap)
-            && data.GetData(DataFormats.Bitmap) is BitmapSource bmp)
+        var bmp = DragDataParser.GetBitmap(data);
+        if (bmp != null)
             return SaveBitmap(bmp, targetDir) ? 1 : 0;
 
-        // URL（含 html/moz-url/text）
-        string? url = ExtractUrl(data);
-        if (!string.IsNullOrEmpty(url))
+        // 优先图片 URL，其次任意 http 文本
+        string? url = DragDataParser.GetImageUrl(data);
+        if (string.IsNullOrEmpty(url))
         {
-            try
-            {
-                var bytes = await _http.GetByteArrayAsync(url);
-                string name = MakeFileName(url);
-                string dest = EnsureUnique(Path.Combine(targetDir, name));
-                await File.WriteAllBytesAsync(dest, bytes);
-                return 1;
-            }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"保存图片失败：{ex.Message}", "JTool",
-                    MessageBoxButton.OK, MessageBoxImage.Warning);
-            }
+            var text = DragDataParser.GetText(data);
+            if (DragDataParser.IsHttp(text)) url = text;
         }
-        return 0;
-    }
+        if (string.IsNullOrEmpty(url)) return 0;
 
-    private static string? ExtractUrl(IDataObject data)
-    {
-        if (data.GetDataPresent("text/x-moz-url"))
-        {
-            var raw = data.GetData("text/x-moz-url") as string;
-            var first = raw?.Split('\n')[0]?.Trim();
-            if (IsHttp(first)) return first;
-        }
-        if (data.GetDataPresent(DataFormats.Html))
-        {
-            var html = data.GetData(DataFormats.Html) as string;
-            var m = System.Text.RegularExpressions.Regex.Match(html ?? "",
-                @"<img[^>]+src=[""']([^""']+)[""']",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-            if (m.Success && IsHttp(m.Groups[1].Value)) return m.Groups[1].Value;
-        }
-        if (data.GetDataPresent(DataFormats.Text))
-        {
-            var t = (data.GetData(DataFormats.Text) as string)?.Trim();
-            if (IsHttp(t)) return t;
-        }
-        return null;
+        var bytes = await _http.GetByteArrayAsync(url);
+        string dest = EnsureUnique(Path.Combine(targetDir, MakeFileName(url)));
+        await File.WriteAllBytesAsync(dest, bytes);
+        return 1;
     }
 
     private static bool SaveBitmap(BitmapSource bmp, string targetDir)
     {
-        try
-        {
-            string dest = EnsureUnique(Path.Combine(targetDir,
-                $"image_{DateTime.Now:yyyyMMdd_HHmmss}.png"));
-            using var fs = new FileStream(dest, FileMode.Create);
-            var enc = new PngBitmapEncoder();
-            enc.Frames.Add(BitmapFrame.Create(bmp));
-            enc.Save(fs);
-            return true;
-        }
-        catch { return false; }
+        string dest = EnsureUnique(Path.Combine(targetDir,
+            $"image_{DateTime.Now:yyyyMMdd_HHmmss}.png"));
+        using var fs = new FileStream(dest, FileMode.Create);
+        var enc = new PngBitmapEncoder();
+        enc.Frames.Add(BitmapFrame.Create(bmp));
+        enc.Save(fs);
+        return true;
     }
-
-    private static bool IsHttp(string? s)
-        => !string.IsNullOrWhiteSpace(s) && (s.StartsWith("http://") || s.StartsWith("https://"));
 
     private static string MakeFileName(string url)
     {
         try
         {
-            var uri = new Uri(url);
-            var name = Path.GetFileName(uri.LocalPath);
+            var name = Path.GetFileName(new Uri(url).LocalPath);
             if (string.IsNullOrWhiteSpace(name) || !Path.HasExtension(name))
                 name = $"image_{DateTime.Now:yyyyMMdd_HHmmss}.jpg";
             return Sanitize(name);
