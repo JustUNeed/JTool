@@ -16,6 +16,8 @@ namespace JTool.Widgets.ShortcutGrid;
 /// <summary>快捷网格：自管数据、排序、刷新、持久化，并贡献"添加快捷方式"投放槽。</summary>
 public sealed partial class ShortcutGridViewModel : ObservableObject, IDropTarget, IDropSlotProvider
 {
+    [ObservableProperty] private bool _isExpanded = true;
+
     private readonly IconService _icons;
     private readonly JsonStore<ShortcutData> _store = new("shortcuts.json");
     private readonly ShortcutData _data;

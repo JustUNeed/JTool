@@ -57,6 +57,28 @@ public sealed partial class FloatWindowViewModel : ObservableObject
 
     [RelayCommand] private void ToggleVisibility() => IsBallVisible = !IsBallVisible;
 
+
+
+    // ===== 常驻（图钉）=====
+    public bool IsPinned
+    {
+        get => _win.Pinned;
+        set
+        {
+            if (_win.Pinned != value)
+            {
+                _win.Pinned = value;
+                OnPropertyChanged();
+                SaveGeometry();   // 状态持久化
+            }
+        }
+    }
+
+    [RelayCommand]
+    private void TogglePin() => IsPinned = !IsPinned;
+
+
+
     // ===== 设置 / 退出 =====
     private SettingsWindow? _settingsWindow;
 
@@ -79,4 +101,5 @@ public sealed class WindowState
     public double Top { get; set; } = 300;
     public double Width { get; set; } = 260;
     public double Height { get; set; } = 360;
+    public bool Pinned { get; set; } = false;   // 新增：常驻状态
 }

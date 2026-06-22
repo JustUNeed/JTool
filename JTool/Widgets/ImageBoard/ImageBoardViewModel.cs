@@ -18,6 +18,8 @@ namespace JTool.Widgets.ImageBoard;
 /// <summary>图片看板：自管图片数据、下载、持久化，并贡献"添加图片到看板"投放槽。</summary>
 public sealed partial class ImageBoardViewModel : ObservableObject, IDropSlotProvider
 {
+    [ObservableProperty] private bool _isExpanded = true;
+
     private readonly WebImageService _web;
     private readonly AppSettings _settings;
     private readonly JsonStore<ImageBoardData> _store = new("images.json");
@@ -71,6 +73,27 @@ public sealed partial class ImageBoardViewModel : ObservableObject, IDropSlotPro
         if (fileName == null) return;
         AddModel(new ImageBoardItem { FileName = fileName, CreatedAt = Now() });
     }
+
+    /// <summary>把本地图片文件复制进看板目录并加入看板。</summary>
+    public void AddLocalFiles(string[] files)
+    {
+        int seq = 0;
+        foreach (var src in files)
+        {
+            try
+            {
+                if (!File.Exists(src)) continue;
+                string ext = Path.GetExtension(src);
+                string fileName = $"img_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{seq++}{ext}";
+                string dest = Path.Combine(Paths.BoardImagesDir, fileName);
+                File.Copy(src, dest, overwrite: false);
+                AddModel(new ImageBoardItem { FileName = fileName, CreatedAt = Now() });
+            }
+            catch (Exception ex) { Logger.Error($"本地图片加入看板失败: {src}", ex); }
+        }
+    }
+
+
 
     public async Task AddFromUrlAsync(string url)
     {
@@ -126,6 +149,8 @@ public sealed partial class ImageBoardViewModel : ObservableObject, IDropSlotPro
     {
         if (ctx.HasBitmap)
             yield return new DropSlot { Title = "🖼 图片到看板", OnDrop = c => AddBitmap(c.Bitmap!) };
+        else if (ctx.HasImageFiles)
+            yield return new DropSlot { Title = "🖼 图片到看板", OnDrop = c => AddLocalFiles(c.ImageFiles) };
         else if (ctx.HasImageUrl && _settings.EnableImageDownload)
             yield return new DropSlot
             {
@@ -133,4 +158,29 @@ public sealed partial class ImageBoardViewModel : ObservableObject, IDropSlotPro
                 OnDrop = async c => await AddFromUrlAsync(c.ImageUrl!)
             };
     }
+
+
+    /// <summary>把剪贴板里的图片粘贴进看板。</summary>
+    public void PasteFromClipboard()
+    {
+        try
+        {
+            if (Clipboard.ContainsImage())
+            {
+                var img = Clipboard.GetImage();
+                if (img != null) { AddBitmap(img); return; }
+            }
+            // 剪贴板里是复制的图片文件
+            if (Clipboard.ContainsFileDropList())
+            {
+                var files = Clipboard.GetFileDropList();
+                var arr = new string[files.Count];
+                files.CopyTo(arr, 0);
+                AddLocalFiles(arr);
+            }
+        }
+        catch (Exception ex) { Logger.Error("粘贴图片到看板失败", ex); }
+    }
+
+
 }

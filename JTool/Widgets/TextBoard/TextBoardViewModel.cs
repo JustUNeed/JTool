@@ -12,6 +12,8 @@ namespace JTool.Widgets.TextBoard;
 /// <summary>文本看板：自管文本数据、持久化，并贡献"添加文本到看板"投放槽。</summary>
 public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProvider
 {
+    [ObservableProperty] private bool _isExpanded = true;
+
     private readonly JsonStore<TextBoardData> _store = new("texts.json");
     private readonly TextBoardData _data;
 
@@ -63,4 +65,16 @@ public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProv
         if (ctx.HasText && !ctx.HasBitmap && !ctx.HasImageUrl)
             yield return new DropSlot { Title = "📌 文本到看板", OnDrop = c => Add(c.Text!) };
     }
+
+    /// <summary>把剪贴板里的文本粘贴进看板。</summary>
+    public void PasteFromClipboard()
+    {
+        try
+        {
+            if (Clipboard.ContainsText())
+                Add(Clipboard.GetText());
+        }
+        catch (Exception ex) { Logger.Error("粘贴文本到看板失败", ex); }
+    }
+
 }

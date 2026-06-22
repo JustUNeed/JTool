@@ -7,6 +7,8 @@ namespace JTool.Widgets.ShortcutGrid;
 
 public sealed partial class ShortcutItemViewModel : ObservableObject
 {
+
+
     private readonly IconService _icons;
     public ShortcutItem Model { get; }
 

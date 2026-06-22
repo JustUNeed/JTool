@@ -35,4 +35,17 @@ public sealed class DropContext
         }
         catch { return path; }
     }
+
+    private static readonly string[] ImageFileExts =
+    { ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp" };
+
+    /// <summary>拖入文件中属于本地图片的那些。</summary>
+    public string[] ImageFiles =>
+        Files.Where(f =>
+            System.IO.File.Exists(f) &&
+            ImageFileExts.Contains(System.IO.Path.GetExtension(f).ToLowerInvariant()))
+        .ToArray();
+
+    public bool HasImageFiles => ImageFiles.Length > 0;
+
 }
