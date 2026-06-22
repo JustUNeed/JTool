@@ -351,12 +351,5 @@ public partial class FloatWindow : Window
     }
 
 
-    private void PasteWidget_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is System.Windows.Controls.Button { Tag: IPasteTarget target })
-        {
-            try { target.PasteFromClipboard(); }
-            catch (Exception ex) { Logger.Error("粘贴操作失败", ex); }
-        }
-    }
+   
 }

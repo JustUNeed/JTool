@@ -1,4 +1,5 @@
 ﻿using Hardcodet.Wpf.TaskbarNotification;
+using JTool.Core;
 using JTool.DragDrop;
 using JTool.Hosting;
 using JTool.Services;
@@ -7,7 +8,6 @@ using JTool.Widgets.ImageBoard;
 using JTool.Widgets.ShortcutGrid;
 using JTool.Widgets.TextBoard;
 using Microsoft.Extensions.DependencyInjection;
-using System;
 using System.Windows;
 
 namespace JTool;
@@ -30,6 +30,11 @@ public partial class App : Application
 
         var win = _provider.GetRequiredService<FloatWindow>();
         win.Show();
+
+       
+
+     
+
     }
 
     private static ServiceProvider BuildServices()
@@ -43,21 +48,15 @@ public partial class App : Application
         s.AddSingleton<WebImageService>();
         s.AddSingleton<FileMoveService>();
         s.AddSingleton<TargetDirStore>();
+        s.AddSingleton<ToastService>();
 
-        // Widget VM（各自单例，便于既当面板控件又当投放槽）
+
+        // 三个模块 VM（单例：既给面板用，又当投放槽 provider）
         s.AddSingleton<ShortcutGridViewModel>();
         s.AddSingleton<ImageBoardViewModel>();
         s.AddSingleton<TextBoardViewModel>();
 
-        // Widget 控件 → 注册为 IPanelWidget（顺序即面板内显示顺序）
-        s.AddSingleton<IPanelWidget>(sp =>
-            new ShortcutGridControl(sp.GetRequiredService<ShortcutGridViewModel>()));
-        s.AddSingleton<IPanelWidget>(sp =>
-            new ImageBoardControl(sp.GetRequiredService<ImageBoardViewModel>()));
-        s.AddSingleton<IPanelWidget>(sp =>
-            new TextBoardControl(sp.GetRequiredService<TextBoardViewModel>()));
-
-        // 投放槽 provider（任意模块都可加入）
+        // 投放槽 provider
         s.AddSingleton<IDropSlotProvider>(sp => sp.GetRequiredService<ShortcutGridViewModel>());
         s.AddSingleton<IDropSlotProvider>(sp => sp.GetRequiredService<ImageBoardViewModel>());
         s.AddSingleton<IDropSlotProvider>(sp => sp.GetRequiredService<TextBoardViewModel>());
@@ -73,6 +72,7 @@ public partial class App : Application
         // 宿主
         s.AddSingleton<FloatWindowViewModel>();
         s.AddSingleton<FloatWindow>();
+
 
         return s.BuildServiceProvider();
     }

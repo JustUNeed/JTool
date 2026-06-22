@@ -1,10 +1,11 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JTool.Core;
 using JTool.Settings;
+using JTool.Widgets.ImageBoard;
+using JTool.Widgets.ShortcutGrid;
+using JTool.Widgets.TextBoard;
 
 namespace JTool.Hosting;
 
@@ -15,15 +16,24 @@ public sealed partial class FloatWindowViewModel : ObservableObject
     private readonly JsonStore<WindowState> _winStore = new("window.json");
     private readonly WindowState _win;
 
-    public ObservableCollection<IPanelWidget> Widgets { get; } = new();
+    // 写死的三个模块 VM，XAML 直接绑定
+    public ShortcutGridViewModel ShortcutVM { get; }
+    public ImageBoardViewModel ImageVM { get; }
+    public TextBoardViewModel TextVM { get; }
 
-    public FloatWindowViewModel(IEnumerable<IPanelWidget> widgets,
-        SettingsService settings, IServiceProvider services)
+    public FloatWindowViewModel(
+        ShortcutGridViewModel shortcutVm,
+        ImageBoardViewModel imageVm,
+        TextBoardViewModel textVm,
+        SettingsService settings,
+        IServiceProvider services)
     {
-        _services = services;
+        ShortcutVM = shortcutVm;
+        ImageVM = imageVm;
+        TextVM = textVm;
         _settings = settings;
+        _services = services;
         _win = _winStore.Load();
-        foreach (var w in widgets) Widgets.Add(w);
     }
 
     public AppSettings Settings => _settings.Current;
@@ -57,8 +67,6 @@ public sealed partial class FloatWindowViewModel : ObservableObject
 
     [RelayCommand] private void ToggleVisibility() => IsBallVisible = !IsBallVisible;
 
-
-
     // ===== 常驻（图钉）=====
     public bool IsPinned
     {
@@ -69,15 +77,12 @@ public sealed partial class FloatWindowViewModel : ObservableObject
             {
                 _win.Pinned = value;
                 OnPropertyChanged();
-                SaveGeometry();   // 状态持久化
+                SaveGeometry();
             }
         }
     }
 
-    [RelayCommand]
-    private void TogglePin() => IsPinned = !IsPinned;
-
-
+    [RelayCommand] private void TogglePin() => IsPinned = !IsPinned;
 
     // ===== 设置 / 退出 =====
     private SettingsWindow? _settingsWindow;
@@ -101,5 +106,5 @@ public sealed class WindowState
     public double Top { get; set; } = 300;
     public double Width { get; set; } = 260;
     public double Height { get; set; } = 360;
-    public bool Pinned { get; set; } = false;   // 新增：常驻状态
+    public bool Pinned { get; set; } = false;
 }

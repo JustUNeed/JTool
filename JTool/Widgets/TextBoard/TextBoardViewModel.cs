@@ -12,7 +12,12 @@ namespace JTool.Widgets.TextBoard;
 /// <summary>文本看板：自管文本数据、持久化，并贡献"添加文本到看板"投放槽。</summary>
 public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProvider
 {
+  
     [ObservableProperty] private bool _isExpanded = true;
+
+    [RelayCommand]
+    private void Paste() => PasteFromClipboard();
+
 
     private readonly JsonStore<TextBoardData> _store = new("texts.json");
     private readonly TextBoardData _data;
@@ -69,12 +74,27 @@ public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProv
     /// <summary>把剪贴板里的文本粘贴进看板。</summary>
     public void PasteFromClipboard()
     {
-        try
+        for (int i = 0; i < 5; i++)
         {
-            if (Clipboard.ContainsText())
-                Add(Clipboard.GetText());
+            try
+            {
+                if (Clipboard.ContainsText())
+                {
+                    var text = Clipboard.GetText();
+                    if (!string.IsNullOrWhiteSpace(text)) Add(text);
+                }
+                return;
+            }
+            catch (System.Runtime.InteropServices.COMException)
+            {
+                System.Threading.Thread.Sleep(60);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("粘贴文本失败", ex);
+                return;
+            }
         }
-        catch (Exception ex) { Logger.Error("粘贴文本到看板失败", ex); }
     }
 
 }
