@@ -1,9 +1,10 @@
-﻿using System;
-using CommunityToolkit.Mvvm.ComponentModel;
+﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JTool.Core;
 using JTool.Settings;
 using JTool.Widgets.TextBoard;
+using System;
+using System.Windows;
 
 namespace JTool.Hosting;
 
@@ -23,10 +24,23 @@ public sealed partial class FloatWindowViewModel : ObservableObject
         _settings = settings;
         _services = services;
         _win = _winStore.Load();
+        ClampIntoVirtualScreen();   // 防止恢复到已不存在的屏幕外
     }
 
 
     public AppSettings Settings => _settings.Current;
+
+    private void ClampIntoVirtualScreen()
+    {
+        var vx = SystemParameters.VirtualScreenLeft;
+        var vy = SystemParameters.VirtualScreenTop;
+        var vw = SystemParameters.VirtualScreenWidth;
+        var vh = SystemParameters.VirtualScreenHeight;
+
+        // 至少保证窗口左上角落在可见区域内，留一点边距
+        _win.Left = Math.Clamp(_win.Left, vx, vx + vw - 40);
+        _win.Top = Math.Clamp(_win.Top, vy, vy + vh - 40);
+    }
 
     // ===== 窗口几何（持久化）=====
     public double WindowLeft

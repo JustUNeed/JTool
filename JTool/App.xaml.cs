@@ -2,7 +2,7 @@
 using JTool.Core;
 
 using JTool.Hosting;
-using JTool.Services;
+
 using JTool.Settings;
 
 
@@ -45,11 +45,7 @@ public partial class App : Application
         // 基础服务
         s.AddSingleton<SettingsService>();
         s.AddSingleton<AppSettings>(sp => sp.GetRequiredService<SettingsService>().Current);
-        s.AddSingleton<IconService>();
-        s.AddSingleton<WebImageService>();
-        s.AddSingleton<FileMoveService>();
-  
-        s.AddSingleton<ToastService>();
+
 
 
 

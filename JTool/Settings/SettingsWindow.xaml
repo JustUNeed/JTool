@@ -46,7 +46,13 @@
             <jt:JTNumberBox Value="{Binding BallSize}" Minimum="0" Maximum="100"
                   Step="1" Decimals="0" Label="悬浮球大小" Margin="5"  />
 
+            <jt:JTButton Content="打开配置文件夹"
+            Command="{Binding OpenConfigFolderCommand}"
+            Margin="0,8,0,0" Padding="8,4" HorizontalAlignment="Left"/>
 
+            <jt:JTButton Content="重置窗口设置（位置/尺寸）"
+            Command="{Binding ResetWindowCommand}"
+            Margin="0,8,0,0" Padding="8,4" HorizontalAlignment="Left"/>
         </StackPanel>
 
 

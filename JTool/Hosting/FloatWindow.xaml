@@ -22,11 +22,6 @@
         
         >
 
-    
-    <jt:JTWindow.Resources>
-        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <local:ExpandGlyphConverter x:Key="ExpandGlyph"/>
-    </jt:JTWindow.Resources>
 
     <Grid >
 
@@ -151,7 +146,10 @@
                     </Thumb.Template>
                 </Thumb>
             </Grid>
-  
+        <!-- 面板内容根容器，起名 PanelRoot -->
+        <Grid x:Name="PanelRoot">
+            <!-- 顶栏 + 四个控件 + ResizeThumb，保持原样 -->
+        </Grid>
 
         <!-- 形态：悬浮球 -->
         <Border x:Name="BallPanel" Width="32" Height="32"

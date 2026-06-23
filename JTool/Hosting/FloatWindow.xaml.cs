@@ -7,11 +7,12 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+using System.Windows.Threading;
 
 namespace JTool.Hosting;
 
@@ -22,9 +23,16 @@ public partial class FloatWindow : JTWindow
     private readonly JsonStore<TextBoardData> _textStore = new("texts.json");
     private readonly JsonStore<FolderBinData> _folderStore = new("folders.json");
 
-
     private bool _draggingWindow;
     private Point _dragOffset;
+
+    // ===== 单一状态来源 =====
+    private enum Shape { Ball, Panel }
+    private Shape _shape = Shape.Ball;
+
+    // 收回判定：不信任 WPF 透明窗的 MouseLeave（子控件间移动会误报），用屏幕坐标兜底
+    private readonly DispatcherTimer _hoverTimer =
+        new() { Interval = TimeSpan.FromMilliseconds(120) };
 
     public FloatWindow(FloatWindowViewModel vm)
     {
@@ -32,48 +40,98 @@ public partial class FloatWindow : JTWindow
         _vm = vm;
         DataContext = vm;
 
+        // 关键：彻底关掉内容撑窗，宽高完全由代码控制
+        SizeToContent = SizeToContent.Manual;
+        MaxWidth = 800;          // 和 PanelWidth 上限一致，双保险
+        MinWidth = 32;
+
+
         Topmost = _vm.Settings.Topmost;
         ApplyBallSize(_vm.Settings.BallSize);
 
-        // 鼠标离开 → 收回成球（常驻时不收）
-        MouseLeave += (_, _) =>
-        {
-            if (_draggingWindow) return;
-            if (_vm.IsPinned) return;          // 常驻：不收回
-            ShowBallOnly();
-        };
+        _hoverTimer.Tick += HoverTimer_Tick;
 
-        // 拖入数据 → 弹出快捷面板形态
-        DragEnter += (_, e) =>
-        {
-            ShowMenu();
-            e.Effects = DragDropEffects.Copy;
-            e.Handled = true;
-        };
-        DragOver += (_, e) => { e.Effects = DragDropEffects.Copy; e.Handled = true; };
+        // 启动时按持久化的常驻状态决定初始形态
+        Loaded += (_, _) => SetShape(_vm.IsPinned ? Shape.Panel : Shape.Ball);
 
-        // 取消常驻且鼠标已离开 → 收回
+        // 取消常驻、且鼠标已不在窗口内 → 立即收回
         _vm.PropertyChanged += (_, e) =>
         {
             if (e.PropertyName == nameof(FloatWindowViewModel.IsPinned)
-                && !_vm.IsPinned && !IsMouseOver)
-                ShowBallOnly();
+                && !_vm.IsPinned && !IsCursorInsideWindow())
+                SetShape(Shape.Ball);
         };
 
-        Loaded += (_, _) =>
+        // 需求2：拖入内容时展开面板；窗口级只负责展开，不接管 Drop，
+        // 松手落点由各 JTUI 子控件（AllowDropImport）自行处理。
+        DragEnter += (_, e) =>
         {
-            SizeToContent = SizeToContent.Manual;
-            if (_vm.IsPinned) ShowMenu();      // 常驻：启动即展开
-            else ShowBallOnly();
+            SetShape(Shape.Panel);
+            // 不设置 e.Handled，让事件继续冒泡给子控件，由它们决定 Effects
         };
 
         InitFileGrid();
         InitImageGrid();
-
         InitTextList();
         InitFolderBin();
     }
 
+    // ===== 唯一的状态切换入口（幂等，避免重复赋值/抖动）=====
+    private void SetShape(Shape shape)
+    {
+        if (_shape == shape) return;
+        _shape = shape;
+        SizeToContent = SizeToContent.Manual;
+
+        if (shape == Shape.Panel)
+        {
+            BallPanel.Visibility = Visibility.Collapsed;
+            PanelRoot.Visibility = Visibility.Visible;     // 显示面板内容
+            Width = _vm.PanelWidth;
+            Height = _vm.PanelHeight;
+            _hoverTimer.Start();
+        }
+        else
+        {
+            PanelRoot.Visibility = Visibility.Collapsed;   // 关键：球态隐藏面板内容
+            BallPanel.Visibility = Visibility.Visible;
+            Width = BallPanel.Width;
+            Height = BallPanel.Height;
+            _hoverTimer.Stop();
+        }
+    }
+
+
+    // 需求1：鼠标移入小图标 → 展开面板（唯一展开入口之一）
+    private void Ball_MouseEnter(object sender, MouseEventArgs e) => SetShape(Shape.Panel);
+
+    // 面板态下定时检查：鼠标真的离开窗口矩形、未在拖窗、未常驻，才收回
+    private void HoverTimer_Tick(object? sender, EventArgs e)
+    {
+        if (_shape != Shape.Panel) { _hoverTimer.Stop(); return; }
+        if (_draggingWindow || _vm.IsPinned) return;   // 需求3：常驻不收回
+        if (!IsCursorInsideWindow()) SetShape(Shape.Ball);
+    }
+
+    private bool IsCursorInsideWindow()
+    {
+        var p = NativeMethods.GetCursorScreenPoint();   // 屏幕坐标，绕开透明窗 MouseLeave 误报
+        return p.X >= Left && p.X <= Left + Width
+            && p.Y >= Top && p.Y <= Top + Height;
+    }
+
+    private void ApplyBallSize(double size)
+    {
+        BallPanel.Width = size;
+        BallPanel.Height = size;
+    }
+
+    protected override void OnClosed(EventArgs e)
+    {
+        _hoverTimer.Stop();
+        _hoverTimer.Tick -= HoverTimer_Tick;
+        base.OnClosed(e);
+    }
 
     // ===== JTFileGrid 接管（含旧 shortcuts.json 迁移）=====
     private void InitFileGrid()
@@ -127,7 +185,7 @@ public partial class FloatWindow : JTWindow
         catch (Exception ex) { Logger.Error("迁移旧 shortcuts.json 失败", ex); return new(); }
     }
 
-    // ===== JTImageGrid 接管（路径指向原图片看板目录）=====
+    // ===== JTImageGrid 接管 =====
     private void InitImageGrid()
     {
         ImageGrid.ImageDirectory = Paths.BoardImagesDir;
@@ -149,10 +207,7 @@ public partial class FloatWindow : JTWindow
 
         ImageGrid.ImageRightClick += path =>
         {
-
-           
-
-            var win = new JTWindow { Width = 1000, Height = 700, Title = "预览", TitleBarMode= JTTitleBarMode.Immersive };
+            var win = new JTWindow { Width = 1000, Height = 700, Title = "预览", TitleBarMode = JTTitleBarMode.Immersive };
             win.Content = new JTImageViewer { ImagePath = path };
             win.Show();
         };
@@ -164,29 +219,23 @@ public partial class FloatWindow : JTWindow
         };
     }
 
-
-
-    // ===== JTFolderBin 接管（沿用同套 JSON 持久化）=====
+    // ===== JTFolderBin 接管 =====
     private void InitFolderBin()
     {
         var data = _folderStore.Load();
         Bin.SetFolders(data.Paths);
 
-        // 列表变化（增删、拖动排序）→ 落盘
         Bin.ListChanged += paths =>
             _folderStore.Save(new FolderBinData { Paths = new List<string>(paths) });
 
-        // 左键 → 打开文件夹
         Bin.ItemClicked += path =>
         {
             try { Process.Start("explorer.exe", path); }
             catch (Exception ex) { Logger.Error($"打开文件夹失败: {path}", ex); }
         };
 
-        // 右键 → 菜单（按需扩展）
         Bin.ItemRightClick += path => ShowFolderMenu(path);
 
-        // 投放结果反馈
         Bin.Dropped += r =>
         {
             if (r.Kind == JTFolderDropKind.Failed)
@@ -194,10 +243,6 @@ public partial class FloatWindow : JTWindow
             else
                 Logger.Info($"已放入 {r.FolderPath}: {r.ResultPath}");
         };
-
-        // 自定义下载（可选）：复用现有 WebImageService
-        // Bin.DownloadHandler = async (url, folder) =>
-        //     await _webImage.DownloadToFileAsync(url, folder);
     }
 
     private void ShowFolderMenu(string path)
@@ -205,49 +250,38 @@ public partial class FloatWindow : JTWindow
         // TODO: 按需要弹出右键菜单（在资源管理器中打开/移除/复制路径等）
     }
 
-
-    private void ApplyBallSize(double size)
+    // ===== JTTextList 接管 =====
+    private void InitTextList()
     {
-        BallPanel.Width = size;
-        BallPanel.Height = size;
+        var data = _textStore.Load();
+        TextList.SetItems(data.Items.Select(it => it.Text));
+
+        TextList.ListChanged += texts =>
+        {
+            var d = new TextBoardData
+            {
+                Items = texts.Select(t => new TextBoardItem
+                {
+                    Text = t,
+                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
+                }).ToList()
+            };
+            _textStore.Save(d);
+        };
+
+        TextList.ItemClicked += text =>
+        {
+            try { Clipboard.SetText(text); }
+            catch (Exception ex) { Logger.Error("复制文本失败", ex); }
+        };
+
+        TextList.ItemRightClick += text => ShowTextMenu(text);
     }
 
-    // ===== 两态切换 =====
-    private void ShowBallOnly()
+    private void ShowTextMenu(string text)
     {
-        SizeToContent = SizeToContent.Manual;
-       // MenuPanel.Visibility = Visibility.Collapsed;
-        BallPanel.Visibility = Visibility.Visible;
-        Width = BallPanel.Width;
-        Height = BallPanel.Height;
+        // TODO: 按需要弹出右键菜单（删除/编辑/复制等）
     }
-
-    private void ShowMenu()
-    {
-        SizeToContent = SizeToContent.Manual;
-        BallPanel.Visibility = Visibility.Collapsed;
-       // MenuPanel.Visibility = Visibility.Visible;
-        Width = _vm.PanelWidth;
-        Height = _vm.PanelHeight;
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    private void Ball_MouseEnter(object sender, MouseEventArgs e) => ShowMenu();
 
     // ===== 窗口拖动 =====
     private void DragHandle_MouseDown(object sender, MouseButtonEventArgs e)
@@ -290,53 +324,4 @@ public partial class FloatWindow : JTWindow
 
     private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
         => _vm.SaveGeometry();
-
-    // ===== JTTextList 接管（沿用原 texts.json 持久化）=====
-    private void InitTextList()
-    {
-        var data = _textStore.Load();
-
-        // texts.json 里存的是 { Items: [ { Text, CreatedAt } ] }，
-        // JTTextList 只认字符串，这里取出 Text 列表喂进去
-        TextList.SetItems(data.Items.Select(it => it.Text));
-
-        // 列表变化时，把字符串重新包成 TextBoardItem 写回，保持原文件格式
-        TextList.ListChanged += texts =>
-        {
-            var d = new TextBoardData
-            {
-                Items = texts.Select(t => new TextBoardItem
-                {
-                    Text = t,
-                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
-                }).ToList()
-            };
-            _textStore.Save(d);
-        };
-
-        // 左键点击 → 复制到剪贴板
-        TextList.ItemClicked += text =>
-        {
-            try { Clipboard.SetText(text); }
-            catch (Exception ex) { Logger.Error("复制文本失败", ex); }
-        };
-
-        // 右键 → 菜单（按需扩展）
-        TextList.ItemRightClick += text => ShowTextMenu(text);
-    }
-
-    private void ShowTextMenu(string text)
-    {
-        // TODO: 按需要弹出右键菜单（删除/编辑/复制等）
-    }
-
 }
-
-// 新的文件网格持久化结构（纯路径列表）
-public sealed class FileGridData
-{
-    public List<string> Paths { get; set; } = new();
-}
-
-
-
