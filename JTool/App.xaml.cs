@@ -6,7 +6,7 @@ using JTool.Services;
 using JTool.Settings;
 
 
-using JTool.Widgets.TextBoard;
+
 using JTUI.Theming;
 using Microsoft.Extensions.DependencyInjection;
 using System.Windows;
@@ -52,10 +52,6 @@ public partial class App : Application
         s.AddSingleton<ToastService>();
 
 
-        // 三个模块 VM（单例：既给面板用，又当投放槽 provider）
-
-   
-        s.AddSingleton<TextBoardViewModel>();
 
  
         // 设置窗口

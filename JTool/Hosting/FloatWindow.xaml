@@ -6,13 +6,17 @@
         xmlns:jt="clr-namespace:JTUI.Controls;assembly=JTUI"
         xmlns:img="clr-namespace:JTUI.Controls.ImageGrid;assembly=JTUI"
         xmlns:file="clr-namespace:JTUI.Controls.FileGrid;assembly=JTUI"
-        Title="JTool" WindowStyle="None" AllowsTransparency="True"
-        Background="Transparent" ShowInTaskbar="False" Topmost="True" AllowDrop="True"
+             xmlns:tl="clr-namespace:JTUI.Controls.TextList;assembly=JTUI"
+               xmlns:folder="clr-namespace:JTUI.Controls.FolderBin;assembly=JTUI"
+
+             
+       
+        ShowInTaskbar="False" Topmost="True" AllowDrop="True"
         Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}"
         
              
-         
-          TitleBarMode="NoTitleBar"
+         TitleBarMode="NoTitleBar"
+        
         
         
         >
@@ -23,12 +27,10 @@
         <local:ExpandGlyphConverter x:Key="ExpandGlyph"/>
     </jt:JTWindow.Resources>
 
-    <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
+    <Grid >
 
-        <!-- 形态：快捷面板 -->
-        <Border x:Name="MenuPanel" Visibility="Collapsed"
-                Width="{Binding PanelWidth}" Height="{Binding PanelHeight}"
-                Background="{DynamicResource JT.ImageGrid.Background}" CornerRadius="12" Padding="8">
+    
+              
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -68,62 +70,62 @@
 
 
                 <!-- 三大控件平分主内容区 -->
+                <!-- 四大控件平分主内容区 -->
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
+                    <!-- 文件 -->
+                    <RowDefinition Height="160"/>
+                    <RowDefinition Height="10"/>
 
-                    <!-- 文件网格（原快捷网格，已换成 JTFileGrid） -->
-                    <file:JTFileGrid x:Name="Files" Grid.Row="0" Margin="2,0,2,4"
-                                     ColumnWidth="80"
-                                     IconSize="32"
-                                      AllowDropImport="True"
-                                     ShowDeleteButton="True"
-                                     />
+                    <!-- 图片 -->
+                    <RowDefinition Height="240"/>
+                    <RowDefinition Height="10"/>
 
-                    <!-- 图片网格 -->
-                    <img:JTImageGrid x:Name="Images" Grid.Row="1" Margin="2,0,2,4"
-                                     AllowDragOut="True"
-                                     AllowDropImport="True"
-                                     ColumnWidth="80"
-                                     ThumbnailSize="80"
-                                     ItemSpacing="2"
-                                     ShowDeleteButton="True"/>
+                    <!-- 文件夹 -->
+                    <RowDefinition Height="80" />
+                    <RowDefinition Height="10"/>
 
-                    <!-- 文本看板 -->
-                    <Border Grid.Row="2" Background="#FF333337" CornerRadius="6"
-                            DataContext="{Binding TextVM}">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <Grid Grid.Row="0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <ToggleButton Grid.Column="0" Width="22" Height="22"
-                                              Background="Transparent" BorderThickness="0"
-                                              Foreground="#FFAAAAAA" Cursor="Hand"
-                                              IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                              Content="{Binding IsExpanded, Converter={StaticResource ExpandGlyph}}"/>
-                                <TextBlock Grid.Column="1" Text="文本看板" Foreground="#FFAAAAAA"
-                                           FontSize="11" VerticalAlignment="Center"/>
-                                <Button Grid.Column="2" Content="📋" Width="22" Height="22"
-                                        Background="Transparent" Foreground="#FFAAAAAA"
-                                        BorderThickness="0" Cursor="Hand" ToolTip="粘贴剪贴板文本"
-                                        Command="{Binding PasteCommand}"/>
-                            </Grid>
-                            <tb:TextBoardControl Grid.Row="1"
-                                Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
-                                Margin="2,4,2,2"/>
-                        </Grid>
-                    </Border>
+
+                    <!-- 文本 -->
+                    <RowDefinition Height="*"/>
+                  
+                  
+
+                </Grid.RowDefinitions>
+
+                    <!-- 1. 文件 -->
+
+                <file:JTFileGrid x:Name="Files"  Grid.Row="0" 
+                         ColumnWidth="80" IconSize="24" ItemSpacing="4"
+                         AllowDropImport="True" ShowDeleteButton="True"/>
+                 
+
+                    <!-- 2. 图片 -->
+
+                <img:JTImageGrid x:Name="Images" Grid.Row="2" 
+                         AllowDragOut="True" AllowDropImport="True"
+                         ColumnWidth="80" ThumbnailSize="80"
+                         ItemSpacing="4" ShowDeleteButton="True"/>
+                 
+
+             
+
+                <folder:JTFolderBin x:Name="Bin"  Grid.Row="4"  
+                           
+                            ItemWidth="80" ItemHeight="40"
+                            ItemSpacing="4"
+                            ShowDeleteButton="True"
+                            AllowReorder="True"/>
+
+
+                <!-- 3. 文本 -->
+
+                <tl:JTTextList x:Name="TextList"  Grid.Row="6" 
+          ShowDeleteButton="True" AllowDropImport="True"
+          AllowReorder="True" EmptyHint="拖入文本"/>
+           
                 </Grid>
+
 
                 <!-- 缩放手柄 -->
                 <Thumb x:Name="ResizeThumb" Grid.Row="1" Width="16" Height="16"
@@ -141,7 +143,7 @@
                     </Thumb.Template>
                 </Thumb>
             </Grid>
-        </Border>
+  
 
         <!-- 形态：悬浮球 -->
         <Border x:Name="BallPanel" Width="32" Height="32"

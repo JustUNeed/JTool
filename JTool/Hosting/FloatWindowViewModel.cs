@@ -14,18 +14,17 @@ public sealed partial class FloatWindowViewModel : ObservableObject
     private readonly JsonStore<WindowState> _winStore = new("window.json");
     private readonly WindowState _win;
 
-    public TextBoardViewModel TextVM { get; }
+ 
 
     public FloatWindowViewModel(
-        TextBoardViewModel textVm,
         SettingsService settings,
         IServiceProvider services)
     {
-        TextVM = textVm;
         _settings = settings;
         _services = services;
         _win = _winStore.Load();
     }
+
 
     public AppSettings Settings => _settings.Current;
 

@@ -1,5 +1,7 @@
 ﻿using JTool.Core;
+using JTool.Widgets.TextBoard;
 using JTUI.Controls;
+using JTUI.Controls.FolderBin;
 using JTUI.Controls.Viewer;
 using System;
 using System.Collections.Generic;
@@ -17,6 +19,10 @@ public partial class FloatWindow : JTWindow
 {
     private readonly FloatWindowViewModel _vm;
     private readonly JsonStore<FileGridData> _fileStore = new("files.json");
+    private readonly JsonStore<TextBoardData> _textStore = new("texts.json");
+    private readonly JsonStore<FolderBinData> _folderStore = new("folders.json");
+
+
     private bool _draggingWindow;
     private Point _dragOffset;
 
@@ -63,6 +69,9 @@ public partial class FloatWindow : JTWindow
 
         InitFileGrid();
         InitImageGrid();
+
+        InitTextList();
+        InitFolderBin();
     }
 
 
@@ -155,6 +164,48 @@ public partial class FloatWindow : JTWindow
         };
     }
 
+
+
+    // ===== JTFolderBin 接管（沿用同套 JSON 持久化）=====
+    private void InitFolderBin()
+    {
+        var data = _folderStore.Load();
+        Bin.SetFolders(data.Paths);
+
+        // 列表变化（增删、拖动排序）→ 落盘
+        Bin.ListChanged += paths =>
+            _folderStore.Save(new FolderBinData { Paths = new List<string>(paths) });
+
+        // 左键 → 打开文件夹
+        Bin.ItemClicked += path =>
+        {
+            try { Process.Start("explorer.exe", path); }
+            catch (Exception ex) { Logger.Error($"打开文件夹失败: {path}", ex); }
+        };
+
+        // 右键 → 菜单（按需扩展）
+        Bin.ItemRightClick += path => ShowFolderMenu(path);
+
+        // 投放结果反馈
+        Bin.Dropped += r =>
+        {
+            if (r.Kind == JTFolderDropKind.Failed)
+                Logger.Error($"投放失败: {r.FolderPath} :: {r.Error}");
+            else
+                Logger.Info($"已放入 {r.FolderPath}: {r.ResultPath}");
+        };
+
+        // 自定义下载（可选）：复用现有 WebImageService
+        // Bin.DownloadHandler = async (url, folder) =>
+        //     await _webImage.DownloadToFileAsync(url, folder);
+    }
+
+    private void ShowFolderMenu(string path)
+    {
+        // TODO: 按需要弹出右键菜单（在资源管理器中打开/移除/复制路径等）
+    }
+
+
     private void ApplyBallSize(double size)
     {
         BallPanel.Width = size;
@@ -165,7 +216,7 @@ public partial class FloatWindow : JTWindow
     private void ShowBallOnly()
     {
         SizeToContent = SizeToContent.Manual;
-        MenuPanel.Visibility = Visibility.Collapsed;
+       // MenuPanel.Visibility = Visibility.Collapsed;
         BallPanel.Visibility = Visibility.Visible;
         Width = BallPanel.Width;
         Height = BallPanel.Height;
@@ -175,10 +226,26 @@ public partial class FloatWindow : JTWindow
     {
         SizeToContent = SizeToContent.Manual;
         BallPanel.Visibility = Visibility.Collapsed;
-        MenuPanel.Visibility = Visibility.Visible;
+       // MenuPanel.Visibility = Visibility.Visible;
         Width = _vm.PanelWidth;
         Height = _vm.PanelHeight;
     }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     private void Ball_MouseEnter(object sender, MouseEventArgs e) => ShowMenu();
 
@@ -223,6 +290,46 @@ public partial class FloatWindow : JTWindow
 
     private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
         => _vm.SaveGeometry();
+
+    // ===== JTTextList 接管（沿用原 texts.json 持久化）=====
+    private void InitTextList()
+    {
+        var data = _textStore.Load();
+
+        // texts.json 里存的是 { Items: [ { Text, CreatedAt } ] }，
+        // JTTextList 只认字符串，这里取出 Text 列表喂进去
+        TextList.SetItems(data.Items.Select(it => it.Text));
+
+        // 列表变化时，把字符串重新包成 TextBoardItem 写回，保持原文件格式
+        TextList.ListChanged += texts =>
+        {
+            var d = new TextBoardData
+            {
+                Items = texts.Select(t => new TextBoardItem
+                {
+                    Text = t,
+                    CreatedAt = DateTime.Now.ToString("yyyy-MM-dd HH:mm")
+                }).ToList()
+            };
+            _textStore.Save(d);
+        };
+
+        // 左键点击 → 复制到剪贴板
+        TextList.ItemClicked += text =>
+        {
+            try { Clipboard.SetText(text); }
+            catch (Exception ex) { Logger.Error("复制文本失败", ex); }
+        };
+
+        // 右键 → 菜单（按需扩展）
+        TextList.ItemRightClick += text => ShowTextMenu(text);
+    }
+
+    private void ShowTextMenu(string text)
+    {
+        // TODO: 按需要弹出右键菜单（删除/编辑/复制等）
+    }
+
 }
 
 // 新的文件网格持久化结构（纯路径列表）
@@ -230,3 +337,6 @@ public sealed class FileGridData
 {
     public List<string> Paths { get; set; } = new();
 }
+
+
+

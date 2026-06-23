@@ -27,5 +27,9 @@
     </Reference>
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="Widgets\" />
+  </ItemGroup>
+
 </Project>
 	
