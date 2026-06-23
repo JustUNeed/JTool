@@ -1,4 +1,4 @@
-﻿<Window x:Class="JTool.Hosting.FloatWindow"
+﻿<jt:JTWindow x:Class="JTool.Hosting.FloatWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:JTool.Hosting"
@@ -8,19 +8,27 @@
         xmlns:file="clr-namespace:JTUI.Controls.FileGrid;assembly=JTUI"
         Title="JTool" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" Topmost="True" AllowDrop="True"
-        Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}">
+        Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}"
+        
+             
+         
+          TitleBarMode="NoTitleBar"
+        
+        
+        >
 
-    <Window.Resources>
+    
+    <jt:JTWindow.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <local:ExpandGlyphConverter x:Key="ExpandGlyph"/>
-    </Window.Resources>
+    </jt:JTWindow.Resources>
 
     <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
 
         <!-- 形态：快捷面板 -->
         <Border x:Name="MenuPanel" Visibility="Collapsed"
                 Width="{Binding PanelWidth}" Height="{Binding PanelHeight}"
-                Background="#FF2D2D30" CornerRadius="12" Padding="8">
+                Background="{DynamicResource JT.ImageGrid.Background}" CornerRadius="12" Padding="8">
             <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
@@ -72,7 +80,7 @@
                                      ColumnWidth="80"
                                      IconSize="32"
                                       AllowDropImport="True"
-                                     
+                                     ShowDeleteButton="True"
                                      />
 
                     <!-- 图片网格 -->
@@ -143,4 +151,4 @@
         </Border>
 
     </Grid>
-</Window>
+</jt:JTWindow>

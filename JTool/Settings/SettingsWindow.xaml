@@ -2,7 +2,9 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="设置" Width="360" Height="280"
-    
+          xmlns:jt="clr-namespace:JTUI.Controls;assembly=JTUI"
+             
+              
        >
 
 

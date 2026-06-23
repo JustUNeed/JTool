@@ -1,4 +1,7 @@
-﻿using System;
+﻿using JTool.Core;
+using JTUI.Controls;
+using JTUI.Controls.Viewer;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -6,13 +9,11 @@ using System.Windows;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Media.Imaging;
-using JTool.Core;
-using JTUI.Controls;
-using JTUI.Controls.Viewer;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace JTool.Hosting;
 
-public partial class FloatWindow : Window
+public partial class FloatWindow : JTWindow
 {
     private readonly FloatWindowViewModel _vm;
     private readonly JsonStore<FileGridData> _fileStore = new("files.json");
@@ -139,7 +140,10 @@ public partial class FloatWindow : Window
 
         Images.ImageRightClick += path =>
         {
-            var win = new JTWindow { Width = 1000, Height = 700, Title = "预览" };
+
+           
+
+            var win = new JTWindow { Width = 1000, Height = 700, Title = "预览", TitleBarMode= JTTitleBarMode.Immersive };
             win.Content = new JTImageViewer { ImagePath = path };
             win.Show();
         };
