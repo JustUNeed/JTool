@@ -1,7 +1,7 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JTool.Core;
-using JTool.DragDrop;
+
 
 using System;
 using System.Collections.ObjectModel;
@@ -10,7 +10,7 @@ using System.Windows;
 namespace JTool.Widgets.TextBoard;
 
 /// <summary>文本看板：自管文本数据、持久化，并贡献"添加文本到看板"投放槽。</summary>
-public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProvider
+public sealed partial class TextBoardViewModel : ObservableObject
 {
   
     [ObservableProperty] private bool _isExpanded = true;
@@ -63,13 +63,6 @@ public sealed partial class TextBoardViewModel : ObservableObject, IDropSlotProv
 
     private void Save() => _store.Save(_data);
 
-    // ===== 投放槽 =====
-    // 仅当不是图片来源时，纯文本才进文本看板（图片来源交给图片看板）
-    public System.Collections.Generic.IEnumerable<DropSlot> GetSlots(DropContext ctx)
-    {
-        if (ctx.HasText && !ctx.HasBitmap && !ctx.HasImageUrl)
-            yield return new DropSlot { Title = "📌 文本到看板", OnDrop = c => Add(c.Text!) };
-    }
 
     /// <summary>把剪贴板里的文本粘贴进看板。</summary>
     public void PasteFromClipboard()

@@ -3,8 +3,6 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using JTool.Core;
 using JTool.Settings;
-using JTool.Widgets.ImageBoard;
-using JTool.Widgets.ShortcutGrid;
 using JTool.Widgets.TextBoard;
 
 namespace JTool.Hosting;
@@ -16,20 +14,13 @@ public sealed partial class FloatWindowViewModel : ObservableObject
     private readonly JsonStore<WindowState> _winStore = new("window.json");
     private readonly WindowState _win;
 
-    // 写死的三个模块 VM，XAML 直接绑定
-    public ShortcutGridViewModel ShortcutVM { get; }
-    public ImageBoardViewModel ImageVM { get; }
     public TextBoardViewModel TextVM { get; }
 
     public FloatWindowViewModel(
-        ShortcutGridViewModel shortcutVm,
-        ImageBoardViewModel imageVm,
         TextBoardViewModel textVm,
         SettingsService settings,
         IServiceProvider services)
     {
-        ShortcutVM = shortcutVm;
-        ImageVM = imageVm;
         TextVM = textVm;
         _settings = settings;
         _services = services;
@@ -61,11 +52,6 @@ public sealed partial class FloatWindowViewModel : ObservableObject
     }
 
     public void SaveGeometry() => _winStore.Save(_win);
-
-    // ===== 可见性 =====
-    [ObservableProperty] private bool _isBallVisible = true;
-
-    [RelayCommand] private void ToggleVisibility() => IsBallVisible = !IsBallVisible;
 
     // ===== 常驻（图钉）=====
     public bool IsPinned

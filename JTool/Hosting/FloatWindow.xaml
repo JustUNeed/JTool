@@ -2,10 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:JTool.Hosting"
-        xmlns:sg="clr-namespace:JTool.Widgets.ShortcutGrid"
-        xmlns:ib="clr-namespace:JTool.Widgets.ImageBoard"
         xmlns:tb="clr-namespace:JTool.Widgets.TextBoard"
-         xmlns:img="clr-namespace:JTUI.Controls.ImageGrid;assembly=JTUI"
+        xmlns:jt="clr-namespace:JTUI.Controls;assembly=JTUI"
+        xmlns:img="clr-namespace:JTUI.Controls.ImageGrid;assembly=JTUI"
+        xmlns:file="clr-namespace:JTUI.Controls.FileGrid;assembly=JTUI"
         Title="JTool" WindowStyle="None" AllowsTransparency="True"
         Background="Transparent" ShowInTaskbar="False" Topmost="True" AllowDrop="True"
         Left="{Binding WindowLeft, Mode=TwoWay}" Top="{Binding WindowTop, Mode=TwoWay}">
@@ -17,175 +17,108 @@
 
     <Grid HorizontalAlignment="Left" VerticalAlignment="Top">
 
-        <!-- 形态：快捷面板（容器） -->
+        <!-- 形态：快捷面板 -->
         <Border x:Name="MenuPanel" Visibility="Collapsed"
                 Width="{Binding PanelWidth}" Height="{Binding PanelHeight}"
                 Background="#FF2D2D30" CornerRadius="12" Padding="8">
             <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="Auto"/>
-                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-                <!-- ===== 左侧主内容 ===== -->
-                <Grid Grid.Column="0">
+                <!-- 顶栏 -->
+                <!-- 顶栏 -->
+                <Grid Grid.Row="0" Margin="0,0,0,8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <Border x:Name="DragHandle" Grid.Column="0" Width="32" Height="32"
+            Background="#FF3F51B5" CornerRadius="4" Cursor="SizeAll"
+            Margin="0,0,8,0" MouseLeftButtonDown="DragHandle_MouseDown">
+                        <TextBlock Text="⠿" Foreground="White" FontSize="14"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Grid.Column="1" Text="JTool" Foreground="#FFAAAAAA"
+               FontSize="12" VerticalAlignment="Center"/>
+                    <ToggleButton Grid.Column="2" Width="24" Height="24" Cursor="Hand"
+                  Background="Transparent" BorderThickness="0"
+                  Foreground="#FFAAAAAA"
+                  IsChecked="{Binding IsPinned}"
+                  ToolTip="常驻（不自动收起）" Content="📌"/>
+                    <Button Grid.Column="3" Content="⚙" Width="24" Height="24" Cursor="Hand"
+            Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
+            Command="{Binding OpenSettingsCommand}" ToolTip="设置"/>
+                    <Button Grid.Column="4" Content="✕" Width="24" Height="24" Cursor="Hand"
+            Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
+            Command="{Binding ExitCommand}" ToolTip="退出"/>
+                </Grid>
+
+
+                <!-- 三大控件平分主内容区 -->
+                <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="*"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
 
-                    <!-- 顶栏 -->
-                    <Grid Grid.Row="0" Margin="0,0,0,8">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Border x:Name="DragHandle" Grid.Column="0" Width="32" Height="32"
-                                Background="#FF3F51B5" CornerRadius="4" Cursor="SizeAll"
-                                Margin="0,0,8,0" MouseLeftButtonDown="DragHandle_MouseDown">
-                            <TextBlock Text="⠿" Foreground="White" FontSize="14"
-                                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <TextBlock Grid.Column="1" Text="JTool" Foreground="#FFAAAAAA"
-                                   FontSize="12" VerticalAlignment="Center"/>
-                        <ToggleButton Grid.Column="2" Width="24" Height="24" Cursor="Hand"
-                                      Background="Transparent" BorderThickness="0"
-                                      Foreground="#FFAAAAAA"
-                                      IsChecked="{Binding IsPinned}"
-                                      ToolTip="常驻（不自动收起）" Content="📌"/>
-                        <Button Grid.Column="3" Content="⚙" Width="24" Height="24" Cursor="Hand"
-                                Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
-                                Command="{Binding OpenSettingsCommand}" ToolTip="设置"/>
-                        <Button Grid.Column="4" Content="✕" Width="24" Height="24" Cursor="Hand"
-                                Background="Transparent" Foreground="#FFAAAAAA" BorderThickness="0"
-                                Command="{Binding ExitCommand}" ToolTip="退出"/>
-                    </Grid>
+                    <!-- 文件网格（原快捷网格，已换成 JTFileGrid） -->
+                    <file:JTFileGrid x:Name="Files" Grid.Row="0" Margin="2,0,2,4"
+                                     ColumnWidth="80"
+                                     IconSize="32"
+                                      AllowDropImport="True"
+                                     
+                                     />
 
-                    <!-- widget 区：写死三个模块，各自带折叠头 -->
-                    <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
-                        <StackPanel>
+                    <!-- 图片网格 -->
+                    <img:JTImageGrid x:Name="Images" Grid.Row="1" Margin="2,0,2,4"
+                                     AllowDragOut="True"
+                                     AllowDropImport="True"
+                                     ColumnWidth="80"
+                                     ThumbnailSize="80"
+                                     ItemSpacing="2"
+                                     ShowDeleteButton="True"/>
 
-                            <!-- 快捷网格 -->
-                            <Border Background="#FF333337" CornerRadius="6" Margin="0,0,0,6"
-                                    DataContext="{Binding ShortcutVM}"
-                                    Visibility="{Binding HasContent, Converter={StaticResource BoolToVis}}">
-                                <StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ToggleButton Grid.Column="0" Width="22" Height="22"
-                                                      Background="Transparent" BorderThickness="0"
-                                                      Foreground="#FFAAAAAA" Cursor="Hand"
-                                                      IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                                      Content="{Binding IsExpanded, Converter={StaticResource ExpandGlyph}}"/>
-                                        <TextBlock Grid.Column="1" Text="快捷" Foreground="#FFAAAAAA"
-                                                   FontSize="11" VerticalAlignment="Center"/>
-                                    </Grid>
-                                    <sg:ShortcutGridControl
-                                        Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
-                                        Margin="2,4,2,2"/>
-                                </StackPanel>
-                            </Border>
-
-
-                            <!-- 图片瀑布流(独立一行) -->
-                            <img:JTImageGrid  x:Name="Grid"
-            Grid.Row="2"
-            Margin="12,0"
-                           AllowDragOut="True"
-                          AllowDropImport="True"
-            ImageDirectory="C:\Users\JUNPC\Desktop\葵"
-            ColumnWidth="80"
-            ThumbnailSize="90"  
-               ItemSpacing="2"
-    ShowDeleteButton="True"
-/>
-
-                            <!-- 图片看板 -->
-                            <Border Background="#FF333337" CornerRadius="6" Margin="0,0,0,6"
-                                    DataContext="{Binding ImageVM}"
-                                    Visibility="{Binding HasContent, Converter={StaticResource BoolToVis}}">
-                                <StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ToggleButton Grid.Column="0" Width="22" Height="22"
-                                                      Background="Transparent" BorderThickness="0"
-                                                      Foreground="#FFAAAAAA" Cursor="Hand"
-                                                      IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                                      Content="{Binding IsExpanded, Converter={StaticResource ExpandGlyph}}"/>
-                                        <TextBlock Grid.Column="1" Text="图片看板" Foreground="#FFAAAAAA"
-                                                   FontSize="11" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="📋" Width="22" Height="22"
-                                                Background="Transparent" Foreground="#FFAAAAAA"
-                                                BorderThickness="0" Cursor="Hand" ToolTip="粘贴剪贴板图片"
-                                                Command="{Binding PasteCommand}"/>
-                                    </Grid>
-                                    <ib:ImageBoardControl
-                                        Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
-                                        Margin="2,4,2,2"/>
-                                </StackPanel>
-                            </Border>
-
-                            <!-- 文本看板 -->
-                            <Border Background="#FF333337" CornerRadius="6" Margin="0,0,0,6"
-                                    DataContext="{Binding TextVM}"
-                                    Visibility="{Binding HasContent, Converter={StaticResource BoolToVis}}">
-                                <StackPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <ToggleButton Grid.Column="0" Width="22" Height="22"
-                                                      Background="Transparent" BorderThickness="0"
-                                                      Foreground="#FFAAAAAA" Cursor="Hand"
-                                                      IsChecked="{Binding IsExpanded, Mode=TwoWay}"
-                                                      Content="{Binding IsExpanded, Converter={StaticResource ExpandGlyph}}"/>
-                                        <TextBlock Grid.Column="1" Text="文本看板" Foreground="#FFAAAAAA"
-                                                   FontSize="11" VerticalAlignment="Center"/>
-                                        <Button Grid.Column="2" Content="📋" Width="22" Height="22"
-                                                Background="Transparent" Foreground="#FFAAAAAA"
-                                                BorderThickness="0" Cursor="Hand" ToolTip="粘贴剪贴板文本"
-                                                Command="{Binding PasteCommand}"/>
-                                    </Grid>
-                                    <tb:TextBoardControl
-                                        Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
-                                        Margin="2,4,2,2"/>
-                                </StackPanel>
-                            </Border>
-
-                        </StackPanel>
-                    </ScrollViewer>
+                    <!-- 文本看板 -->
+                    <Border Grid.Row="2" Background="#FF333337" CornerRadius="6"
+                            DataContext="{Binding TextVM}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid Grid.Row="0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <ToggleButton Grid.Column="0" Width="22" Height="22"
+                                              Background="Transparent" BorderThickness="0"
+                                              Foreground="#FFAAAAAA" Cursor="Hand"
+                                              IsChecked="{Binding IsExpanded, Mode=TwoWay}"
+                                              Content="{Binding IsExpanded, Converter={StaticResource ExpandGlyph}}"/>
+                                <TextBlock Grid.Column="1" Text="文本看板" Foreground="#FFAAAAAA"
+                                           FontSize="11" VerticalAlignment="Center"/>
+                                <Button Grid.Column="2" Content="📋" Width="22" Height="22"
+                                        Background="Transparent" Foreground="#FFAAAAAA"
+                                        BorderThickness="0" Cursor="Hand" ToolTip="粘贴剪贴板文本"
+                                        Command="{Binding PasteCommand}"/>
+                            </Grid>
+                            <tb:TextBoardControl Grid.Row="1"
+                                Visibility="{Binding IsExpanded, Converter={StaticResource BoolToVis}}"
+                                Margin="2,4,2,2"/>
+                        </Grid>
+                    </Border>
                 </Grid>
 
-                <!-- ===== 右侧常驻投放竖条：仅常驻时显示 ===== -->
-                <Border x:Name="DockStrip" Grid.Column="1" Width="120"
-                        Margin="8,0,0,0" CornerRadius="8" AllowDrop="True"
-                        Background="#FF26262A" BorderBrush="#FF555555" BorderThickness="1"
-                        Visibility="{Binding IsPinned, Converter={StaticResource BoolToVis}}"
-                        DragEnter="DockStrip_DragEnter"
-                        DragLeave="DockStrip_DragLeave">
-                    <Grid>
-                        <TextBlock x:Name="DockHint" Text="拖入到此"
-                                   Foreground="#FF777777" FontSize="11"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        <StackPanel x:Name="DockSlotsPanel" Margin="4"/>
-                    </Grid>
-                </Border>
-
                 <!-- 缩放手柄 -->
-                <Thumb x:Name="ResizeThumb" Grid.Column="1" Width="16" Height="16"
+                <Thumb x:Name="ResizeThumb" Grid.Row="1" Width="16" Height="16"
                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
                        Margin="0,0,-4,-4" Cursor="SizeNWSE"
                        DragDelta="ResizeThumb_DragDelta"
@@ -202,13 +135,7 @@
             </Grid>
         </Border>
 
-        <!-- 形态二：投放槽 -->
-        <Border x:Name="DropPanel" Visibility="Collapsed"
-                Background="#FF2D2D30" CornerRadius="12" Padding="6" Width="140">
-            <StackPanel x:Name="DropSlotsPanel"/>
-        </Border>
-
-        <!-- 形态零：悬浮球 -->
+        <!-- 形态：悬浮球 -->
         <Border x:Name="BallPanel" Width="32" Height="32"
                 Background="#FF3F51B5" Cursor="Hand" MouseEnter="Ball_MouseEnter">
             <TextBlock Text="J" Foreground="White" FontSize="22" FontWeight="Bold"

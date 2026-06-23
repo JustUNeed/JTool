@@ -1,13 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
 using System.Windows;
-using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
-using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using JTool.Core;
-using JTool.DragDrop;
 using JTUI.Controls;
 using JTUI.Controls.Viewer;
 
@@ -16,105 +15,140 @@ namespace JTool.Hosting;
 public partial class FloatWindow : Window
 {
     private readonly FloatWindowViewModel _vm;
-    private readonly DropRouter _router;
-    private readonly DispatcherTimer _collapseTimer;
-    private bool _suppressHover;
+    private readonly JsonStore<FileGridData> _fileStore = new("files.json");
     private bool _draggingWindow;
     private Point _dragOffset;
 
-    public FloatWindow(FloatWindowViewModel vm, DropRouter router)
+    public FloatWindow(FloatWindowViewModel vm)
     {
         InitializeComponent();
         _vm = vm;
-        _router = router;
         DataContext = vm;
 
         Topmost = _vm.Settings.Topmost;
         ApplyBallSize(_vm.Settings.BallSize);
 
-        _collapseTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(120) };
-        _collapseTimer.Tick += (_, _) =>
-        {
-            _collapseTimer.Stop();
-            if (_draggingWindow) return;
-            if (_vm.IsPinned) return;                       // 常驻时不收
-            if (!IsMouseReallyOver()) { ShowBallOnly(); _suppressHover = false; }
-        };
-
+        // 鼠标离开 → 收回成球（常驻时不收）
         MouseLeave += (_, _) =>
         {
-            if (_draggingWindow) return;     // 正在拖动窗口时不收回
-            if (_vm.IsPinned) return;        // 常驻时不收回
-            _collapseTimer.Start();
+            if (_draggingWindow) return;
+            if (_vm.IsPinned) return;          // 常驻：不收回
+            ShowBallOnly();
         };
 
-        MouseEnter += (_, _) => _collapseTimer.Stop();
+        // 拖入数据 → 弹出快捷面板形态
+        DragEnter += (_, e) =>
+        {
+            ShowMenu();
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        };
+        DragOver += (_, e) => { e.Effects = DragDropEffects.Copy; e.Handled = true; };
 
-        DragEnter += Window_DragEnter;
-        DragOver += Window_DragOver;
-        DragLeave += Window_DragLeave;
-
+        // 取消常驻且鼠标已离开 → 收回
         _vm.PropertyChanged += (_, e) =>
         {
-            if (e.PropertyName == nameof(FloatWindowViewModel.IsBallVisible))
-                ApplyVisibility();
-
             if (e.PropertyName == nameof(FloatWindowViewModel.IsPinned)
-               && !_vm.IsPinned && !IsMouseReallyOver())
-                _collapseTimer.Start();                     // 取消常驻且鼠标已离开→收回
+                && !_vm.IsPinned && !IsMouseOver)
+                ShowBallOnly();
         };
 
         Loaded += (_, _) =>
         {
             SizeToContent = SizeToContent.Manual;
-            if (_vm.IsPinned)
-                ShowMenu();   // 新增：常驻则直接显示面板
+            if (_vm.IsPinned) ShowMenu();      // 常驻：启动即展开
             else ShowBallOnly();
         };
 
+        InitFileGrid();
+        InitImageGrid();
+    }
 
 
+    // ===== JTFileGrid 接管（含旧 shortcuts.json 迁移）=====
+    private void InitFileGrid()
+    {
+        var data = _fileStore.Load();
 
+        if (data.Paths.Count == 0)
+        {
+            var migrated = TryMigrateLegacyShortcuts();
+            if (migrated.Count > 0)
+            {
+                data.Paths = migrated;
+                _fileStore.Save(data);
+            }
+        }
 
+        Files.SetItems(data.Paths);
 
-        // 左键:复制图片到剪贴板
-        Grid.ImageLeftClick += path =>
+        Files.ItemClicked += path =>
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo { FileName = path, UseShellExecute = true });
+            }
+            catch (Exception ex) { Logger.Error($"启动失败: {path}", ex); }
+        };
+
+        Files.ListChanged += paths =>
+            _fileStore.Save(new FileGridData { Paths = new List<string>(paths) });
+    }
+
+    private static List<string> TryMigrateLegacyShortcuts()
+    {
+        try
+        {
+            var legacyPath = Paths.File("shortcuts.json");
+            if (!File.Exists(legacyPath)) return new();
+
+            var json = File.ReadAllText(legacyPath);
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var result = new List<string>();
+            if (doc.RootElement.TryGetProperty("Items", out var items)
+                && items.ValueKind == System.Text.Json.JsonValueKind.Array)
+            {
+                foreach (var it in items.EnumerateArray())
+                    if (it.TryGetProperty("Path", out var p) && p.GetString() is { Length: > 0 } s)
+                        result.Add(s);
+            }
+            return result;
+        }
+        catch (Exception ex) { Logger.Error("迁移旧 shortcuts.json 失败", ex); return new(); }
+    }
+
+    // ===== JTImageGrid 接管（路径指向原图片看板目录）=====
+    private void InitImageGrid()
+    {
+        Images.ImageDirectory = Paths.BoardImagesDir;
+
+        Images.ImageLeftClick += path =>
         {
             try
             {
                 var bmp = new BitmapImage();
                 bmp.BeginInit();
-                bmp.CacheOption = BitmapCacheOption.OnLoad;   // 读完即释放文件句柄
+                bmp.CacheOption = BitmapCacheOption.OnLoad;
                 bmp.UriSource = new Uri(path);
                 bmp.EndInit();
                 bmp.Freeze();
-
                 Clipboard.SetImage(bmp);
             }
-            catch (Exception ex)
-            {
-                MessageBox.Show($"复制失败:{ex.Message}");
-            }
+            catch (Exception ex) { Logger.Error("复制图片失败", ex); }
         };
 
-        // 右键:打开预览窗口
-        Grid.ImageRightClick += path =>
+        Images.ImageRightClick += path =>
         {
             var win = new JTWindow { Width = 1000, Height = 700, Title = "预览" };
-            var viewer = new JTImageViewer { ImagePath = path };   // 自动用同目录构建翻页列表
-            win.Content = viewer;
+            win.Content = new JTImageViewer { ImagePath = path };
             win.Show();
         };
 
-        Grid.ImageImported += path => MessageBox.Show($"已添加 {System.IO.Path.GetFileName(path)}");
-        Grid.ImportFailed += (reason, src) => MessageBox.Show($"导入失败({reason}):{src}");
-        Grid.ImageDeleted += path => System.IO.File.Delete(path);
-
-
-
-
-
-
+        Images.ImageDeleted += path =>
+        {
+            try { if (File.Exists(path)) File.Delete(path); }
+            catch (Exception ex) { Logger.Error($"删除图片失败: {path}", ex); }
+        };
     }
 
     private void ApplyBallSize(double size)
@@ -123,12 +157,11 @@ public partial class FloatWindow : Window
         BallPanel.Height = size;
     }
 
-    // ===== 三态切换 =====
+    // ===== 两态切换 =====
     private void ShowBallOnly()
     {
         SizeToContent = SizeToContent.Manual;
         MenuPanel.Visibility = Visibility.Collapsed;
-        DropPanel.Visibility = Visibility.Collapsed;
         BallPanel.Visibility = Visibility.Visible;
         Width = BallPanel.Width;
         Height = BallPanel.Height;
@@ -138,127 +171,18 @@ public partial class FloatWindow : Window
     {
         SizeToContent = SizeToContent.Manual;
         BallPanel.Visibility = Visibility.Collapsed;
-        DropPanel.Visibility = Visibility.Collapsed;
         MenuPanel.Visibility = Visibility.Visible;
         Width = _vm.PanelWidth;
         Height = _vm.PanelHeight;
     }
 
-    private void ShowDrop()
-    {
-        BallPanel.Visibility = Visibility.Collapsed;
-        MenuPanel.Visibility = Visibility.Collapsed;
-        DropPanel.Visibility = Visibility.Visible;
-        SizeToContent = SizeToContent.Height;
-        Width = 140;
-    }
-
-    private void Ball_MouseEnter(object sender, MouseEventArgs e)
-    {
-        if (_suppressHover) return;
-        _collapseTimer.Stop();
-        ShowMenu();
-    }
-
-    private void ApplyVisibility()
-    {
-        if (_vm.IsBallVisible) { Show(); ShowBallOnly(); }
-        else Hide();
-    }
-
-    // ===== 拖入：解析 + 用 router 生成槽 =====
-    private void Window_DragEnter(object sender, DragEventArgs e)
-    {
-        if (!_router.CanAccept(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
-
-        if (_vm.IsPinned)
-        {
-            // 常驻：不切投放态，直接把槽填进右侧竖条，鼠标移过去即可落
-            BuildDockSlots(_router.Parse(e.Data));
-            e.Effects = DragDropEffects.Copy;
-            e.Handled = true;
-            return;
-        }
-
-        _collapseTimer.Stop();
-        ShowDrop();
-        BuildSlots(_router.Parse(e.Data));
-        e.Effects = DragDropEffects.Copy;
-        e.Handled = true;
-    }
-
-
-
-
-
-    private void Window_DragOver(object sender, DragEventArgs e)
-    {
-        e.Effects = _router.CanAccept(e.Data) ? DragDropEffects.Copy : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-
-    private void Window_DragLeave(object sender, DragEventArgs e)
-    {
-        if (_vm.IsPinned)
-        {
-            if (!IsMouseReallyOver()) ClearDockSlots();
-            return;
-        }
-        if (!IsMouseReallyOver()) ShowBallOnly();
-    }
-
-
-
-
-
-    private void BuildSlots(DropContext ctx)
-    {
-        DropSlotsPanel.Children.Clear();
-        foreach (var slot in _router.CollectSlots(ctx))
-            DropSlotsPanel.Children.Add(CreateSlotButton(slot, ctx));
-    }
-
-    private Border CreateSlotButton(DropSlot slot, DropContext ctx)
-    {
-        var border = new Border
-        {
-            Height = 40,
-            Margin = new Thickness(2),
-            CornerRadius = new CornerRadius(6),
-            Background = (Brush)new BrushConverter().ConvertFromString("#FF3F51B5")!,
-            AllowDrop = true
-        };
-        border.Child = new TextBlock
-        {
-            Text = slot.Title,
-            Foreground = Brushes.White,
-            FontSize = 12,
-            TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center
-        };
-        border.DragEnter += (_, e) => { border.Opacity = 0.7; e.Effects = DragDropEffects.Copy; e.Handled = true; };
-        border.DragOver += (_, e) => { e.Effects = DragDropEffects.Copy; e.Handled = true; };
-        border.DragLeave += (_, e) => { border.Opacity = 1.0; e.Handled = true; };
-        border.Drop += (_, e) =>
-        {
-            border.Opacity = 1.0;
-            try { slot.OnDrop(ctx); }
-            catch (Exception ex) { Logger.Error("投放执行失败", ex); }
-            e.Handled = true;
-            ShowBallOnly();
-        };
-        return border;
-    }
+    private void Ball_MouseEnter(object sender, MouseEventArgs e) => ShowMenu();
 
     // ===== 窗口拖动 =====
     private void DragHandle_MouseDown(object sender, MouseButtonEventArgs e)
     {
-        _draggingWindow = true; _suppressHover = true;
+        _draggingWindow = true;
         _dragOffset = e.GetPosition(this);
-        _collapseTimer.Stop();
         DragHandle.CaptureMouse();
         DragHandle.MouseMove += DragHandle_MouseMove;
         DragHandle.MouseLeftButtonUp += DragHandle_MouseUp;
@@ -282,16 +206,6 @@ public partial class FloatWindow : Window
         _vm.WindowLeft = Left;
         _vm.WindowTop = Top;
         _vm.SaveGeometry();
-
-        if (_vm.IsPinned)
-        {
-            ShowMenu();
-        }   // 常驻：保持面板
-        else
-        { 
-            ShowBallOnly(); 
-        }   // 非常驻：收起面板
-         
     }
 
     // ===== 缩放 =====
@@ -305,98 +219,10 @@ public partial class FloatWindow : Window
 
     private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
         => _vm.SaveGeometry();
+}
 
-
-
-
-
-
-    // ===== 常驻竖条（DockStrip）=====
-    // 拖拽进入面板范围 → 实时填充竖条的槽并高亮；每个槽自己接收 Drop，直接执行不弹菜单。
-
-    private void DockStrip_DragEnter(object sender, DragEventArgs e)
-    {
-        if (!_router.CanAccept(e.Data)) { e.Effects = DragDropEffects.None; e.Handled = true; return; }
-        BuildDockSlots(_router.Parse(e.Data));
-        e.Effects = DragDropEffects.Copy;
-        e.Handled = true;
-    }
-
-    private void DockStrip_DragLeave(object sender, DragEventArgs e)
-    {
-        // 鼠标真正离开竖条范围才清空（避免在子槽间移动时误清）
-        var p = NativeMethods.GetCursorScreenPoint();
-        var tl = DockStrip.PointToScreen(new Point(0, 0));
-        bool inside = p.X >= tl.X && p.X <= tl.X + DockStrip.ActualWidth
-                   && p.Y >= tl.Y && p.Y <= tl.Y + DockStrip.ActualHeight;
-        if (!inside) ClearDockSlots();
-        e.Handled = true;
-    }
-
-    private void BuildDockSlots(DropContext ctx)
-    {
-        DockSlotsPanel.Children.Clear();
-        var slots = _router.CollectSlots(ctx);
-        DockHint.Visibility = slots.Count > 0 ? Visibility.Collapsed : Visibility.Visible;
-
-        foreach (var slot in slots)
-            DockSlotsPanel.Children.Add(CreateDockSlot(slot, ctx));
-    }
-
-    private void ClearDockSlots()
-    {
-        DockSlotsPanel.Children.Clear();
-        DockHint.Visibility = Visibility.Visible;
-    }
-
-    private Border CreateDockSlot(DropSlot slot, DropContext ctx)
-    {
-        var border = new Border
-        {
-            MinHeight = 40,
-            Margin = new Thickness(0, 0, 0, 6),
-            CornerRadius = new CornerRadius(6),
-            Background = (Brush)new BrushConverter().ConvertFromString("#FF3F51B5")!,
-            AllowDrop = true
-        };
-        border.Child = new TextBlock
-        {
-            Text = slot.Title,
-            Foreground = Brushes.White,
-            FontSize = 11,
-            TextWrapping = TextWrapping.Wrap,
-            TextAlignment = TextAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(4)
-        };
-        border.DragEnter += (_, e) => { border.Opacity = 0.65; e.Effects = DragDropEffects.Copy; e.Handled = true; };
-        border.DragOver += (_, e) => { e.Effects = DragDropEffects.Copy; e.Handled = true; };
-        border.DragLeave += (_, e) => { border.Opacity = 1.0; e.Handled = true; };
-        border.Drop += (_, e) =>
-        {
-            border.Opacity = 1.0;
-            try { slot.OnDrop(ctx); }
-            catch (Exception ex) { Logger.Error("常驻竖条投放失败", ex); }
-            e.Handled = true;
-            ClearDockSlots();            // 落完清空，回到占位提示；常驻态保持面板不收回
-        };
-        return border;
-    }
-
-
-
-
-
-    // ===== 工具 =====
-    private bool IsMouseReallyOver()
-    {
-        var p = NativeMethods.GetCursorScreenPoint();
-        var tl = PointToScreen(new Point(0, 0));
-        return p.X >= tl.X && p.X <= tl.X + ActualWidth
-            && p.Y >= tl.Y && p.Y <= tl.Y + ActualHeight;
-    }
-
-
-   
+// 新的文件网格持久化结构（纯路径列表）
+public sealed class FileGridData
+{
+    public List<string> Paths { get; set; } = new();
 }

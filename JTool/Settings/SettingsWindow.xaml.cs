@@ -1,8 +1,9 @@
-﻿using System.Windows;
+﻿using JTUI.Theming;
+using System.Windows;
 
 namespace JTool.Settings;
 
-public partial class SettingsWindow : Window
+public partial class SettingsWindow : JTUI.Controls.JTWindow
 {
     private readonly SettingsViewModel _vm;
 
@@ -17,5 +18,14 @@ public partial class SettingsWindow : Window
     {
         _vm.SaveCommand.Execute(null);
         Close();
+    }
+
+
+
+    private void ToggleTheme_Click(object sender, RoutedEventArgs e)
+    {
+
+        JTThemeManager.Toggle();
+
     }
 }
