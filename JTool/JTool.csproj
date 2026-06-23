@@ -22,13 +22,13 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Reference Include="JTUI">
-      <HintPath>..\..\JTUI\JTUI\bin\Release\net8.0-windows\publish\win-x64\JTUI.dll</HintPath>
-    </Reference>
+    <Folder Include="Widgets\" />
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="Widgets\" />
+    <Reference Include="JTUI">
+      <HintPath>..\..\WPF代码\JTUI\JTUI\bin\Release\net8.0-windows\publish\win-x64\JTUI.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
 </Project>

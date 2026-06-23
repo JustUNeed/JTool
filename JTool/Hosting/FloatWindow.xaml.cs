@@ -130,9 +130,9 @@ public partial class FloatWindow : JTWindow
     // ===== JTImageGrid 接管（路径指向原图片看板目录）=====
     private void InitImageGrid()
     {
-        Images.ImageDirectory = Paths.BoardImagesDir;
+        ImageGrid.ImageDirectory = Paths.BoardImagesDir;
 
-        Images.ImageLeftClick += path =>
+        ImageGrid.ImageLeftClick += path =>
         {
             try
             {
@@ -147,7 +147,7 @@ public partial class FloatWindow : JTWindow
             catch (Exception ex) { Logger.Error("复制图片失败", ex); }
         };
 
-        Images.ImageRightClick += path =>
+        ImageGrid.ImageRightClick += path =>
         {
 
            
@@ -157,7 +157,7 @@ public partial class FloatWindow : JTWindow
             win.Show();
         };
 
-        Images.ImageDeleted += path =>
+        ImageGrid.ImageDeleted += path =>
         {
             try { if (File.Exists(path)) File.Delete(path); }
             catch (Exception ex) { Logger.Error($"删除图片失败: {path}", ex); }
