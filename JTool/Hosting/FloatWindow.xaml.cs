@@ -1,4 +1,5 @@
 ﻿using JTool.Core;
+using JTool.Settings;
 using JTool.Widgets.TextBoard;
 using JTUI.Controls;
 using JTUI.Controls.FolderBin;
@@ -9,10 +10,13 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace JTool.Hosting;
 
@@ -25,6 +29,11 @@ public partial class FloatWindow : JTWindow
 
     private bool _draggingWindow;
     private Point _dragOffset;
+    private FrameworkElement? _dragElement;   // 当前正在用于拖窗的元素（球或拖动块）
+
+    // 缩放：记录拖动起点的窗口尺寸，避免用"当前 Width"做基准导致抽搐
+    private double _resizeStartW;
+    private double _resizeStartH;
 
     // ===== 单一状态来源 =====
     private enum Shape { Ball, Panel }
@@ -43,11 +52,19 @@ public partial class FloatWindow : JTWindow
         // 关键：彻底关掉内容撑窗，宽高完全由代码控制
         SizeToContent = SizeToContent.Manual;
         MaxWidth = 800;          // 和 PanelWidth 上限一致，双保险
-        MinWidth = 32;
-
+        MinWidth = 16;
 
         Topmost = _vm.Settings.Topmost;
         ApplyBallSize(_vm.Settings.BallSize);
+
+        // 设置项实时同步：球大小 / 总在最前
+        _vm.Settings.PropertyChanged += (_, e) =>
+        {
+            if (e.PropertyName == nameof(AppSettings.BallSize))
+                Dispatcher.Invoke(() => ApplyBallSize(_vm.Settings.BallSize));
+            else if (e.PropertyName == nameof(AppSettings.Topmost))
+                Dispatcher.Invoke(() => Topmost = _vm.Settings.Topmost);
+        };
 
         _hoverTimer.Tick += HoverTimer_Tick;
 
@@ -62,7 +79,7 @@ public partial class FloatWindow : JTWindow
                 SetShape(Shape.Ball);
         };
 
-        // 需求2：拖入内容时展开面板；窗口级只负责展开，不接管 Drop，
+        // 拖入内容时展开面板；窗口级只负责展开，不接管 Drop，
         // 松手落点由各 JTUI 子控件（AllowDropImport）自行处理。
         DragEnter += (_, e) =>
         {
@@ -74,6 +91,38 @@ public partial class FloatWindow : JTWindow
         InitImageGrid();
         InitTextList();
         InitFolderBin();
+
+
+
+
+        ApplyBallSize(_vm.Settings.BallSize);
+        ApplyBallAppearance();
+
+        _vm.Settings.PropertyChanged += (_, e) =>
+        {
+            switch (e.PropertyName)
+            {
+                case nameof(AppSettings.BallSize):
+                    Dispatcher.Invoke(() => ApplyBallSize(_vm.Settings.BallSize));
+                    break;
+                case nameof(AppSettings.Topmost):
+                    Dispatcher.Invoke(() => Topmost = _vm.Settings.Topmost);
+                    break;
+                case nameof(AppSettings.BallColor):
+                case nameof(AppSettings.BallText):
+                case nameof(AppSettings.BallCornerRadius):
+                case nameof(AppSettings.BallImagePath):
+                    Dispatcher.Invoke(ApplyBallAppearance);
+                    break;
+            }
+        };
+
+
+
+
+
+
+
     }
 
     // ===== 唯一的状态切换入口（幂等，避免重复赋值/抖动）=====
@@ -83,8 +132,11 @@ public partial class FloatWindow : JTWindow
         _shape = shape;
         SizeToContent = SizeToContent.Manual;
 
+  
+
         if (shape == Shape.Panel)
         {
+            PanelRootBackground.Visibility = Visibility.Visible;
             BallPanel.Visibility = Visibility.Collapsed;
             PanelRoot.Visibility = Visibility.Visible;     // 显示面板内容
             Width = _vm.PanelWidth;
@@ -93,6 +145,7 @@ public partial class FloatWindow : JTWindow
         }
         else
         {
+            PanelRootBackground.Visibility = Visibility.Collapsed;
             PanelRoot.Visibility = Visibility.Collapsed;   // 关键：球态隐藏面板内容
             BallPanel.Visibility = Visibility.Visible;
             Width = BallPanel.Width;
@@ -101,15 +154,14 @@ public partial class FloatWindow : JTWindow
         }
     }
 
-
-    // 需求1：鼠标移入小图标 → 展开面板（唯一展开入口之一）
+    // 鼠标移入小图标 → 展开面板（唯一展开入口之一）
     private void Ball_MouseEnter(object sender, MouseEventArgs e) => SetShape(Shape.Panel);
 
     // 面板态下定时检查：鼠标真的离开窗口矩形、未在拖窗、未常驻，才收回
     private void HoverTimer_Tick(object? sender, EventArgs e)
     {
         if (_shape != Shape.Panel) { _hoverTimer.Stop(); return; }
-        if (_draggingWindow || _vm.IsPinned) return;   // 需求3：常驻不收回
+        if (_draggingWindow || _vm.IsPinned) return;   // 常驻不收回
         if (!IsCursorInsideWindow()) SetShape(Shape.Ball);
     }
 
@@ -120,16 +172,102 @@ public partial class FloatWindow : JTWindow
             && p.Y >= Top && p.Y <= Top + Height;
     }
 
+    // 球大小同时驱动：球、拖动块、顶栏让位列；球态下立即同步窗口尺寸
     private void ApplyBallSize(double size)
     {
+        if (size < 16) size = 16;
+
         BallPanel.Width = size;
         BallPanel.Height = size;
+        BallTextBlock.FontSize = size * 0.6;
+        DragTextBlock.FontSize = size * 0.6;  
+        TopBar.Height = size;
+        DragSlot.Width = new GridLength(size);
+
+        if (_shape == Shape.Ball)
+        {
+            Width = size;
+            Height = size;
+        }
     }
+
+    private void ApplyBallAppearance()
+    {
+        var s = _vm.Settings;
+
+        bool useImage = !string.IsNullOrWhiteSpace(s.BallImagePath) && File.Exists(s.BallImagePath);
+
+        BitmapImage? img = null;
+        if (useImage)
+        {
+            try
+            {
+                img = new BitmapImage();
+                img.BeginInit();
+                img.CacheOption = BitmapCacheOption.OnLoad;
+                img.CreateOptions = BitmapCreateOptions.IgnoreImageCache;
+                img.UriSource = new Uri(s.BallImagePath);
+                img.EndInit();
+                img.Freeze();
+            }
+            catch (Exception ex)
+            {
+                Logger.Error("加载悬浮球图片失败", ex);
+                img = null;
+                useImage = false;
+            }
+        }
+
+        // 背景色（失败兜底）
+        System.Windows.Media.Brush bg;
+        try
+        {
+            bg = (System.Windows.Media.Brush)
+                new System.Windows.Media.BrushConverter().ConvertFromString(s.BallColor)!;
+        }
+        catch
+        {
+            bg = new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(0x3F, 0x51, 0xB5));
+        }
+
+        // ===== 悬浮球：可图片可纯色 =====
+        BallPanel.CornerRadius = new CornerRadius(s.BallCornerRadius);
+        if (useImage && img != null)
+        {
+            BallImage.Source = img;
+            BallImage.Visibility = Visibility.Visible;
+            BallTextBlock.Visibility = Visibility.Collapsed;
+            BallPanel.Background = System.Windows.Media.Brushes.Transparent;
+        }
+        else
+        {
+            BallImage.Visibility = Visibility.Collapsed;
+            BallImage.Source = null;
+            BallPanel.Background = bg;
+            BallTextBlock.Text = s.BallText ?? "";
+            BallTextBlock.Visibility = string.IsNullOrEmpty(s.BallText)
+                ? Visibility.Collapsed : Visibility.Visible;
+        }
+
+        // ===== 拖动块：始终纯色 + 文字（不显示图片） =====
+        DragHandle.CornerRadius = new CornerRadius(s.BallCornerRadius);
+        DragHandle.Background = bg;
+        DragTextBlock.Text = s.BallText ?? "";
+        DragTextBlock.Visibility = string.IsNullOrEmpty(s.BallText)
+            ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+
+
 
     protected override void OnClosed(EventArgs e)
     {
         _hoverTimer.Stop();
         _hoverTimer.Tick -= HoverTimer_Tick;
+        _vm.WindowLeft = Left;
+        _vm.WindowTop = Top;
+        _vm.SaveGeometry();
         base.OnClosed(e);
     }
 
@@ -283,14 +421,15 @@ public partial class FloatWindow : JTWindow
         // TODO: 按需要弹出右键菜单（删除/编辑/复制等）
     }
 
-    // ===== 窗口拖动 =====
+    // ===== 窗口拖动（球态点 BallPanel、面板态点 DragHandle，复用同一逻辑）=====
     private void DragHandle_MouseDown(object sender, MouseButtonEventArgs e)
     {
+        _dragElement = (FrameworkElement)sender;
         _draggingWindow = true;
         _dragOffset = e.GetPosition(this);
-        DragHandle.CaptureMouse();
-        DragHandle.MouseMove += DragHandle_MouseMove;
-        DragHandle.MouseLeftButtonUp += DragHandle_MouseUp;
+        _dragElement.CaptureMouse();
+        _dragElement.MouseMove += DragHandle_MouseMove;
+        _dragElement.MouseLeftButtonUp += DragHandle_MouseUp;
         e.Handled = true;
     }
 
@@ -305,23 +444,41 @@ public partial class FloatWindow : JTWindow
     private void DragHandle_MouseUp(object sender, MouseButtonEventArgs e)
     {
         _draggingWindow = false;
-        DragHandle.ReleaseMouseCapture();
-        DragHandle.MouseMove -= DragHandle_MouseMove;
-        DragHandle.MouseLeftButtonUp -= DragHandle_MouseUp;
+        if (_dragElement != null)
+        {
+            _dragElement.ReleaseMouseCapture();
+            _dragElement.MouseMove -= DragHandle_MouseMove;
+            _dragElement.MouseLeftButtonUp -= DragHandle_MouseUp;
+            _dragElement = null;
+        }
+
+        // 回写位置并持久化
         _vm.WindowLeft = Left;
         _vm.WindowTop = Top;
         _vm.SaveGeometry();
+        e.Handled = true;
     }
 
-    // ===== 缩放 =====
+    // ===== 缩放（用拖动起点尺寸 + 累计增量，杜绝抽搐）=====
+    private void ResizeThumb_DragStarted(object sender, DragStartedEventArgs e)
+    {
+        // 记录起点：窗口左上角屏幕坐标固定不动，缩放只改宽高
+        _resizeStartW = Width;
+        _resizeStartH = Height;
+    }
+
     private void ResizeThumb_DragDelta(object sender, DragDeltaEventArgs e)
     {
-        _vm.PanelWidth += e.HorizontalChange;
-        _vm.PanelHeight += e.VerticalChange;
+        if (_shape != Shape.Panel) return;
+        var p = NativeMethods.GetCursorScreenPoint();
+        _vm.PanelWidth = p.X - Left;     // setter 内部已 Clamp
+        _vm.PanelHeight = p.Y - Top;
         Width = _vm.PanelWidth;
         Height = _vm.PanelHeight;
     }
 
     private void ResizeThumb_DragCompleted(object sender, DragCompletedEventArgs e)
         => _vm.SaveGeometry();
+
+    
 }
